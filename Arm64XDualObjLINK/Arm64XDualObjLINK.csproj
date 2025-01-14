@@ -9,6 +9,5 @@
 
   <ItemGroup>
     <ProjectReference Include="../LibAmong3/LibAmong3.csproj" />
-    <Folder Include="Helpers\" />
   </ItemGroup>
 </Project>

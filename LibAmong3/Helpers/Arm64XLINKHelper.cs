@@ -1,39 +1,35 @@
-﻿using CoffReader;
-using LibAmong3.Helpers;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
-namespace Arm64XLINK
+namespace LibAmong3.Helpers
 {
-    internal class Program
+    public class Arm64XLINKHelper
     {
-        static int Main(string[] args)
-        {
-            var linkParser = new ParseLinkArgHelper();
+        private readonly Func<TempFileHelper> _newTempFileHelper;
+        private readonly RunLINKHelper _linkExe;
+        private readonly ParseLinkArgHelper _linkParser;
 
+        public Arm64XLINKHelper(
+            ParseLinkArgHelper linkParser,
+            RunLINKHelper linkExe,
+            Func<TempFileHelper> newTempFileHelper)
+        {
+            _newTempFileHelper = newTempFileHelper;
+            _linkExe = linkExe;
+            _linkParser = linkParser;
+        }
+
+        public int RunLINK(string[] args, bool dualObj)
+        {
             var argList = args
-                .Select(linkParser.Parse)
+                .Select(_linkParser.Parse)
                 .ToArray();
 
-            var pwd = Environment.CurrentDirectory;
-
-            var linkExe = @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe";
-
-            int RunLINK(string[] runArgs)
-            {
-                var psi = new ProcessStartInfo(
-                    linkExe,
-                    string.Join(" ", runArgs.Select(WinCmdHelper.EscapeArg))
-                )
-                {
-                    UseShellExecute = false,
-                };
-                var p = Process.Start(psi) ?? throw new Exception("Failed to start process");
-                p.WaitForExit();
-                return p.ExitCode;
-            }
-
-            using var tempFileHelper = new TempFileHelper();
+            using var tempFileHelper = _newTempFileHelper();
 
             var parseArgs = new ParseWinArgsHelper();
 
@@ -67,7 +63,7 @@ namespace Arm64XLINK
                     File.WriteAllLines(
                         atFile,
                         parseArgs.ParseArgs(File.ReadAllText(arg.At))
-                            .Select(linkParser.Parse)
+                            .Select(_linkParser.Parse)
                             .SelectMany(ProcessLinkArg),
                         new UTF8Encoding(true)
                     );
@@ -80,21 +76,14 @@ namespace Arm64XLINK
                 }
             }
 
-            var exitCode = RunLINK(
+            var exitCode = _linkExe.RunLINK(
                 argList
                     .SelectMany(ProcessLinkArg)
-                    .Select(WinCmdHelper.EscapeArg)
                     .Append("/MACHINE:ARM64X")
                     .ToArray()
             );
 
             return exitCode;
         }
-
-        private static string Norm(string path)
-            => path
-                .Replace("\\", "_")
-                .Replace("/", "_")
-            ;
     }
 }

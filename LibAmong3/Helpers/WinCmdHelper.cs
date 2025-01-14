@@ -10,7 +10,7 @@ namespace LibAmong3.Helpers
     {
         private static readonly char[] _argSep = new char[] { ' ', '"', };
 
-        public static string EscapeArg(string arg)
+        public string EscapeArg(string arg)
         {
             return (0 <= arg.IndexOfAny(_argSep))
                 ? $"\"{arg.Replace("\"", "\"\"")}\""
