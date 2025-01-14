@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 
 namespace LibAmong3.Helpers
 {
-    public record RunLIBHelper(WinCmdHelper WinCmdHelper, string LIB)
+    public record RunLIBHelper(WinCmdHelper WinCmdHelper, LibExe Lib)
     {
         public int RunLIB(string[] runArgs)
         {
             var psi = new ProcessStartInfo(
-                LIB,
+                Lib.Lib,
                 string.Join(" ", runArgs.Select(WinCmdHelper.EscapeArg))
             )
             {

@@ -1,4 +1,5 @@
 ﻿using LibAmong3.Helpers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Arm64XSingleLibLIB
 {
@@ -6,17 +7,15 @@ namespace Arm64XSingleLibLIB
     {
         static int Main(string[] args)
         {
-            return new Arm64XLIBHelper(
-                libParser: new ParseLibArgHelper(),
-                parseArgs: new ParseWinArgsHelper(),
-                libExe: new RunLIBHelper(
-                    new WinCmdHelper(), 
-                    @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe"
-                ),
-                newTempFileHelper: TempFileHelperProvider.GetDefault(),
-                normHelper: new NormHelper()
+            using (var resolver = new ServiceCollection()
+                .AddLibAmong3()
+                .Add3Exes()
+                .BuildServiceProvider()
             )
-                .RunLIB(args: args, dualObj: false);
+            {
+                return resolver.GetRequiredService<Arm64XLIBHelper>()
+                    .RunLIB(args: args, dualObj: false);
+            }
         }
     }
 }

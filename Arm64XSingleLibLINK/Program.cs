@@ -1,4 +1,5 @@
 ﻿using LibAmong3.Helpers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Arm64XSingleLibLINK
 {
@@ -6,15 +7,15 @@ namespace Arm64XSingleLibLINK
     {
         static int Main(string[] args)
         {
-            return new Arm64XLINKHelper(
-                linkParser: new ParseLinkArgHelper(),
-                linkExe: new RunLINKHelper(
-                    new WinCmdHelper(),
-                    @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe"
-                ),
-                newTempFileHelper: TempFileHelperProvider.GetDefault()
+            using (var resolver = new ServiceCollection()
+                .AddLibAmong3()
+                .Add3Exes()
+                .BuildServiceProvider()
             )
-                .RunLINK(args: args, dualObj: false);
+            {
+                return resolver.GetRequiredService<Arm64XLINKHelper>()
+                    .RunLINK(args: args, dualObj: false);
+            }
         }
     }
 }

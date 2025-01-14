@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 
 namespace LibAmong3.Helpers
 {
-    public record RunLINKHelper(WinCmdHelper WinCmdHelper, string LINK)
+    public record RunLINKHelper(WinCmdHelper WinCmdHelper, LinkExe Link)
     {
         public int RunLINK(string[] runArgs)
         {
             var psi = new ProcessStartInfo(
-                LINK,
+                Link.Link,
                 string.Join(" ", runArgs.Select(WinCmdHelper.EscapeArg))
             )
             {
