@@ -27,26 +27,13 @@ namespace Arm64XLIB
 
             var libParser = new ParseLibArgHelper();
 
-            var tmpObjDir = Path.Combine(
-                Path.GetTempPath(),
-                Guid.NewGuid().ToString("N")
-            );
-            Directory.CreateDirectory(tmpObjDir);
-
-            int number = 0;
-
-            string GetTemp(string suffix)
-            {
-                var path = Path.Combine(
-                    tmpObjDir,
-                    $"{++number:00000}_{suffix}"
-                );
-                return path;
-            }
+            using var tempFileHelper = new TempFileHelper();
 
             var libArgs = args
                 .Select(libParser.Parse)
                 .ToArray();
+
+            var parseArgs = new ParseWinArgsHelper();
 
             IEnumerable<string> ProcessLibArg(LibArg arg)
             {
@@ -54,55 +41,12 @@ namespace Arm64XLIB
                 {
                     return [];
                 }
-                else if (arg.IsObj)
-                {
-                    if (arg.Value.EndsWith(".obj", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        var file = File.ReadAllBytes(arg.Value);
-                        var coff = CoffParser.Parse(file, true);
-                        if (coff.Magic != 0x14c)
-                        {
-                            throw new Exception("Not a I386 COFF (ARM64/ARM64EC mixed) file!");
-                        }
-
-                        var prefix = GetTemp(Norm(arg.Value));
-                        var arm64Obj = prefix + ".ARM64.obj";
-
-                        File.WriteAllBytes(
-                            arm64Obj,
-                            CoffParser.ReadRawData(
-                                file,
-                                coff.Sections
-                                    .Single(it => it.Name == "AA64.obj")
-                            )
-                                .ToArray()
-                        );
-
-                        var arm64ECObj = prefix + ".ARM64EC.obj";
-
-                        File.WriteAllBytes(
-                            arm64ECObj,
-                            CoffParser.ReadRawData(
-                                file,
-                                coff.Sections
-                                    .Single(it => it.Name == "A641.obj")
-                            )
-                                .ToArray()
-                        );
-
-                        return [arm64Obj, arm64ECObj,];
-                    }
-                    else
-                    {
-                        return [arg.Value];
-                    }
-                }
                 else if (arg.At.Length != 0)
                 {
-                    var atFile = GetTemp(".tmp");
+                    var atFile = tempFileHelper.GetTempFile("at.txt");
                     File.WriteAllLines(
                         atFile,
-                        File.ReadAllLines(arg.At)
+                        parseArgs.ParseArgs(File.ReadAllText(arg.At))
                             .Select(libParser.Parse)
                             .SelectMany(ProcessLibArg),
                         new UTF8Encoding(true)
@@ -126,11 +70,5 @@ namespace Arm64XLIB
 
             return exitCode;
         }
-
-        private static string Norm(string path)
-            => path
-                .Replace("\\", "_")
-                .Replace("/", "_")
-            ;
     }
 }

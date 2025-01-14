@@ -30,6 +30,7 @@ namespace Arm64XCL
 
             var clExe = @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe";
             var linkExe = @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe";
+            var libExe = @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe";
 
             int RunCL(string[] runArgs)
             {
@@ -59,39 +60,28 @@ namespace Arm64XCL
                 return p.ExitCode;
             }
 
-            string GetTemp(string suffix)
+            int RunLIB(string[] runArgs)
             {
-                var path = Path.Combine(
-                    Path.GetTempPath(),
-                    Guid.NewGuid().ToString("N") + suffix
-                );
-                return path;
+                var psi = new ProcessStartInfo(
+                    libExe,
+                    string.Join(" ", runArgs.Select(WinCmdHelper.EscapeArg))
+                )
+                {
+                    UseShellExecute = false,
+                };
+                var p = Process.Start(psi) ?? throw new Exception("Failed to start process");
+                p.WaitForExit();
+                return p.ExitCode;
             }
+
+            using var tempFileHelper = new TempFileHelper();
 
             var exitCode = 0;
 
-            if (clArgs.Any(it => it.ShowIncludes))
-            {
-                exitCode = RunCL(
-                    new string[0]
-                    .Concat(
-                        clArgs
-                            .Select(it => it.Value)
-                    )
-                    .Append("/link")
-                    .Concat(
-                        linkArgs
-                            .Select(it => it.Value)
-                    )
-                    .ToArray()
-                );
-
-                return exitCode;
-            }
-            else if (clArgs.Any(it => it.CompileOnly))
+            if (clArgs.Any(it => it.CompileOnly))
             {
                 // Build ARM64 COFF
-                var arm64Obj = GetTemp(".obj");
+                var arm64Obj = tempFileHelper.GetTempFile("arm64.obj");
                 exitCode = RunCL(
                     clArgs
                         .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
@@ -107,7 +97,7 @@ namespace Arm64XCL
                 }
 
                 // Build ARM64EC COFF
-                var arm64ECObj = GetTemp(".obj");
+                var arm64ECObj = tempFileHelper.GetTempFile("arm64ec.obj");
                 exitCode = RunCL(
                     clArgs
                         .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
@@ -123,20 +113,15 @@ namespace Arm64XCL
                     return exitCode;
                 }
 
-                // Save pseudo-ARM64X COFF
+                // Save ARM64X COFF as native ARM64X LIB
+                // This ARM64X LIB contains special `/<ECSYMBOLS>/` file so it cannot be made easily.
 
                 var arm64xObj = clArgs
                     .FirstOrDefault(it => it.Fo.Length != 0)?
                     .Fo ?? throw new ArgumentException("Need /FoFILENAME.OBJ !");
 
-                File.WriteAllBytes(
-                    arm64xObj,
-                    new MakeCoffHelper().Make(
-                        [
-                            (0xAA64, ".obj", File.ReadAllBytes(arm64Obj)),
-                            (0xA641, ".obj", File.ReadAllBytes(arm64ECObj)),
-                        ]
-                    )
+                RunLIB(
+                    ["/machine:ARM64X", $"/out:{arm64xObj}", arm64Obj, arm64ECObj]
                 );
 
                 return 0;
@@ -144,7 +129,7 @@ namespace Arm64XCL
             else
             {
                 // Build ARM64 COFF
-                var arm64Obj = GetTemp(".obj");
+                var arm64Obj = tempFileHelper.GetTempFile("arm64.obj");
                 exitCode = RunCL(
                     clArgs
                         .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
@@ -161,7 +146,7 @@ namespace Arm64XCL
                 }
 
                 // Build ARM64EC COFF
-                var arm64ECObj = GetTemp(".obj");
+                var arm64ECObj = tempFileHelper.GetTempFile("arm64ec.obj");
                 exitCode = RunCL(
                     clArgs
                         .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
