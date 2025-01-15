@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CoffReader;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -9,6 +10,7 @@ namespace LibAmong3.Helpers
 {
     public class Arm64XLINKHelper
     {
+        private readonly NormHelper _normHelper;
         private readonly Func<TempFileHelper> _newTempFileHelper;
         private readonly RunLINKHelper _linkExe;
         private readonly ParseLinkArgHelper _linkParser;
@@ -16,8 +18,10 @@ namespace LibAmong3.Helpers
         public Arm64XLINKHelper(
             ParseLinkArgHelper linkParser,
             RunLINKHelper linkExe,
+            NormHelper normHelper,
             Func<TempFileHelper> newTempFileHelper)
         {
+            _normHelper = normHelper;
             _newTempFileHelper = newTempFileHelper;
             _linkExe = linkExe;
             _linkParser = linkParser;
@@ -47,6 +51,42 @@ namespace LibAmong3.Helpers
                     )
                     {
                         return [arg.Value];
+                    }
+                    else if (dualObj && arg.Value.EndsWith(".obj", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        var file = File.ReadAllBytes(arg.Value);
+                        var coff = CoffParser.Parse(file, true);
+                        if (coff.Magic != 0x14c)
+                        {
+                            throw new Exception("Not a I386 COFF (ARM64/ARM64EC mixed) file!");
+                        }
+
+                        var prefix = arg.Value;
+                        var arm64Obj = tempFileHelper.GetTempFile(_normHelper.Norm(prefix + ".ARM64.obj"));
+
+                        File.WriteAllBytes(
+                            arm64Obj,
+                            CoffParser.ReadRawData(
+                                file,
+                                coff.Sections
+                                    .Single(it => it.Name == "AA64.obj")
+                            )
+                                .ToArray()
+                        );
+
+                        var arm64ECObj = tempFileHelper.GetTempFile(_normHelper.Norm(prefix + ".ARM64EC.obj"));
+
+                        File.WriteAllBytes(
+                            arm64ECObj,
+                            CoffParser.ReadRawData(
+                                file,
+                                coff.Sections
+                                    .Single(it => it.Name == "A641.obj")
+                            )
+                                .ToArray()
+                        );
+
+                        return [arm64Obj, arm64ECObj,];
                     }
                     else
                     {

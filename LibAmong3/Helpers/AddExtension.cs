@@ -19,6 +19,7 @@ namespace LibAmong3.Helpers
             services.AddSingleton<ParseClArgHelper>();
             services.AddSingleton<ParseLibArgHelper>();
             services.AddSingleton<ParseLinkArgHelper>();
+            services.AddSingleton<ParseWinArgsHelper>();
             services.AddSingleton<RunCLHelper>();
             services.AddSingleton<RunLIBHelper>();
             services.AddSingleton<RunLINKHelper>();
