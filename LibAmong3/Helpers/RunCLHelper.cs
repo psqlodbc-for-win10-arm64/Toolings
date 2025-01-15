@@ -7,13 +7,13 @@ using System.Threading.Tasks;
 
 namespace LibAmong3.Helpers
 {
-    public record RunCLHelper(WinCmdHelper WinCmdHelper, CLExe CLExe)
+    public record RunCLHelper(CLCmdHelper CLCmdHelper, CLExe CLExe)
     {
         public int RunCL(string[] runArgs)
         {
             var psi = new ProcessStartInfo(
                 CLExe.CL,
-                string.Join(" ", runArgs.Select(WinCmdHelper.EscapeArg))
+                string.Join(" ", runArgs.Select(CLCmdHelper.EscapeArg))
             )
             {
                 UseShellExecute = false,

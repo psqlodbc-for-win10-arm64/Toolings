@@ -15,6 +15,7 @@ namespace LibAmong3.Helpers
             services.AddSingleton<Arm64XCLHelper>();
             services.AddSingleton<Arm64XLIBHelper>();
             services.AddSingleton<Arm64XLINKHelper>();
+            services.AddSingleton<CLCmdHelper>();
             services.AddSingleton<DecideCLTargetTypeHelper>();
             services.AddSingleton<MakeCoffHelper>();
             services.AddSingleton<NormHelper>();
