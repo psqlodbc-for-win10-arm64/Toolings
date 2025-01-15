@@ -15,10 +15,6 @@ namespace LibAmong3.Helpers
                 var opt = arg.Substring(1);
 
                 if (false) { }
-                else if (opt.StartsWith("Fo", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return new CLArg(arg, Fo: opt.Substring(2));
-                }
                 else if (string.Compare(opt, "link", true) == 0)
                 {
                     return new CLArg(arg, Link: true);
@@ -30,6 +26,14 @@ namespace LibAmong3.Helpers
                 else if (string.Compare(opt, "arm64EC", true) == 0)
                 {
                     return new CLArg(arg, Arm64EC: true);
+                }
+                else if (opt.StartsWith("fo:", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return new CLArg(arg, Fo: opt.Substring(3));
+                }
+                else if (opt.StartsWith("fo", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return new CLArg(arg, Fo: opt.Substring(2));
                 }
                 else if (opt.StartsWith("fd:", StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -70,6 +74,10 @@ namespace LibAmong3.Helpers
                 else if (string.Compare(opt, "P", true) == 0)
                 {
                     return new CLArg(arg, P: true);
+                }
+                else if (string.Compare(opt, "Zs", true) == 0)
+                {
+                    return new CLArg(arg, Zs: true);
                 }
                 else
                 {

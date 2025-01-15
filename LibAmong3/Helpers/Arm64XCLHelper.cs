@@ -63,6 +63,17 @@ namespace LibAmong3.Helpers
 
             using var tempFileHelper = _newTempFileHelper();
 
+            var commonClArgs = clArgs
+                .Where(it => true
+                    && it.Fo.Length == 0
+                    && !it.FileInput
+                    && !it.Arm64EC
+                );
+
+            var clFileArgs = clArgs
+                .Where(it => it.FileInput)
+                .ToArray();
+
             var exitCode = 0;
 
             if (clArgs.Any(it => it.CompileOnly))
@@ -70,21 +81,24 @@ namespace LibAmong3.Helpers
                 var arm64xObj = clArgs
                     .FirstOrDefault(it => it.Fo.Length != 0)?
                     .Fo
-                        ?? clArgs
-                            .Where(it => it.FileInput)
+                        ?? clFileArgs
                             .Select(it => Path.ChangeExtension(it.Value, ".obj"))
                             .FirstOrDefault()
                         ?? throw new ArgumentException("Need /FoFILENAME.OBJ or single source file to comiple!");
 
                 var objName = _normHelper.Norm(Path.GetFileName(arm64xObj));
 
+                var buildTargets = clFileArgs
+                    .Select(it => it.Value)
+                    .ToArray();
+
                 // Build ARM64 COFF
                 var arm64Obj = tempFileHelper.GetTempFile($"{objName}.arm64.obj");
                 exitCode = _clExe.RunCL(
-                    clArgs
-                        .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
+                    commonClArgs
                         .Select(it => it.Value)
                         .Append($"/Fo{arm64Obj}")
+                        .Concat(buildTargets)
                         .ToArray()
                 );
 
@@ -97,11 +111,11 @@ namespace LibAmong3.Helpers
                 // Build ARM64EC COFF
                 var arm64ECObj = tempFileHelper.GetTempFile($"{objName}.arm64ec.obj");
                 exitCode = _clExe.RunCL(
-                    clArgs
-                        .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
+                    commonClArgs
                         .Select(it => it.Value)
                         .Append($"/Fo{arm64ECObj}")
                         .Append($"/arm64EC")
+                        .Concat(buildTargets)
                         .ToArray()
                 );
 
@@ -137,22 +151,11 @@ namespace LibAmong3.Helpers
                     );
                 }
             }
-            else if (clArgs.Any(it => it.E || it.EP || it.P))
+            else if (clArgs.Any(it => it.E || it.EP || it.P || it.Zs))
             {
                 // Only pre-processor
 
                 var clFilesList = new List<string>();
-
-                var commonClArgs = clArgs
-                    .Where(it => true
-                        && it.Fo.Length == 0
-                        && !it.FileInput
-                        && !it.Arm64EC
-                    );
-
-                var clFileArgs = clArgs
-                    .Where(it => it.FileInput)
-                    .ToArray();
 
                 clFilesList.AddRange(
                     clFileArgs
@@ -175,17 +178,6 @@ namespace LibAmong3.Helpers
             {
                 var clFilesList = new List<string>();
 
-                var commonClArgs = clArgs
-                    .Where(it => true
-                        && it.Fo.Length == 0
-                        && !it.FileInput
-                        && !it.Arm64EC
-                    );
-
-                var clFileArgs = clArgs
-                    .Where(it => it.FileInput)
-                    .ToArray();
-
                 foreach (var fileArg in clFileArgs)
                 {
                     var objFileName = _normHelper.Norm(Path.GetFileName(fileArg.Value));
@@ -201,7 +193,7 @@ namespace LibAmong3.Helpers
                                         commonClArgs
                                             .Select(it => it.Value)
                                             .Append($"/Fo{arm64Obj}")
-                                            .Append("/c")
+                                            .Append("-c")
                                             .Append(fileArg.Value)
                                             .ToArray()
                                     );
@@ -215,6 +207,7 @@ namespace LibAmong3.Helpers
                                     if (!File.Exists(arm64Obj))
                                     {
                                         Console.Error.WriteLine("No ARM64 obj generated.");
+
                                         return 1;
                                     }
 
@@ -229,7 +222,7 @@ namespace LibAmong3.Helpers
                                             .Select(it => it.Value)
                                             .Append($"/Fo{arm64ECObj}")
                                             .Append($"/arm64EC")
-                                            .Append("/c")
+                                            .Append("-c")
                                             .Append(fileArg.Value)
                                             .ToArray()
                                     );

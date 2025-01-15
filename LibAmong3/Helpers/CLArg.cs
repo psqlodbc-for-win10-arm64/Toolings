@@ -26,7 +26,8 @@ namespace LibAmong3.Helpers
         bool LDd = false,
         bool E = false,
         bool EP = false,
-        bool P = false
+        bool P = false,
+        bool Zs = false
     )
     {
 
