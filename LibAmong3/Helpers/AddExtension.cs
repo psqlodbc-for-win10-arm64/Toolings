@@ -34,17 +34,33 @@ namespace LibAmong3.Helpers
 
         public static IServiceCollection Add3Exes(this IServiceCollection services)
         {
-            string GetByEnvOr(string env, string defaultExe)
+            string GetByEnvOr(string env, params string[] defaultExe)
             {
                 var envExe = Environment.GetEnvironmentVariable(env);
-                return string.IsNullOrWhiteSpace(envExe) ? defaultExe : envExe;
+                if (string.IsNullOrWhiteSpace(envExe))
+                {
+                    foreach (var exe in defaultExe)
+                    {
+                        if (File.Exists(exe))
+                        {
+                            return exe;
+                        }
+                    }
+
+                    return defaultExe.Last();
+                }
+                else
+                {
+                    return envExe;
+                }
             }
 
             services.AddSingleton(
                 sp => new CLExe(
                     GetByEnvOr(
                         "CL_EXE",
-                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe"
+                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe",
+                        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe"
                     )
                 )
             );
@@ -52,7 +68,8 @@ namespace LibAmong3.Helpers
                 sp => new LinkExe(
                     GetByEnvOr(
                         "LINK_EXE",
-                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe"
+                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe",
+                        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe"
                     )
                 )
             );
@@ -60,7 +77,8 @@ namespace LibAmong3.Helpers
                 sp => new LibExe(
                     GetByEnvOr(
                         "LIB_EXE",
-                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe"
+                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe",
+                        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe"
                     )
                 )
             );
