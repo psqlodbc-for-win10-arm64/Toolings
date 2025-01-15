@@ -1,4 +1,6 @@
-﻿using System;
+﻿using CoffReader;
+using LibAmong3.Helpers.CLTargetHelpers;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -9,6 +11,7 @@ namespace LibAmong3.Helpers
 {
     public class Arm64XCLHelper
     {
+        private readonly DecideCLTargetTypeHelper _decideCLTargetTypeHelper;
         private readonly MakeCoffHelper _makeCoffHelper;
         private readonly Func<TempFileHelper> _newTempFileHelper;
         private readonly NormHelper _normHelper;
@@ -26,8 +29,10 @@ namespace LibAmong3.Helpers
             RunLIBHelper libExe,
             NormHelper normHelper,
             MakeCoffHelper makeCoffHelper,
-            Func<TempFileHelper> newTempFileHelper)
+            Func<TempFileHelper> newTempFileHelper,
+            DecideCLTargetTypeHelper decideCLTargetTypeHelper)
         {
+            _decideCLTargetTypeHelper = decideCLTargetTypeHelper;
             _makeCoffHelper = makeCoffHelper;
             _newTempFileHelper = newTempFileHelper;
             _normHelper = normHelper;
@@ -64,7 +69,12 @@ namespace LibAmong3.Helpers
             {
                 var arm64xObj = clArgs
                     .FirstOrDefault(it => it.Fo.Length != 0)?
-                    .Fo ?? throw new ArgumentException("Need /FoFILENAME.OBJ !");
+                    .Fo
+                        ?? clArgs
+                            .Where(it => it.FileInput)
+                            .Select(it => Path.ChangeExtension(it.Value, ".obj"))
+                            .FirstOrDefault()
+                        ?? throw new ArgumentException("Need /FoFILENAME.OBJ or single source file to comiple!");
 
                 var objName = _normHelper.Norm(Path.GetFileName(arm64xObj));
 
@@ -127,52 +137,206 @@ namespace LibAmong3.Helpers
                     );
                 }
             }
+            else if (clArgs.Any(it => it.E || it.EP || it.P))
+            {
+                // Only pre-processor
+
+                var clFilesList = new List<string>();
+
+                var commonClArgs = clArgs
+                    .Where(it => true
+                        && it.Fo.Length == 0
+                        && !it.FileInput
+                        && !it.Arm64EC
+                    );
+
+                var clFileArgs = clArgs
+                    .Where(it => it.FileInput)
+                    .ToArray();
+
+                clFilesList.AddRange(
+                    clFileArgs
+                        .Select(it => it.Value)
+                );
+
+                exitCode = _clExe.RunCL(
+                    new string[0]
+                        .Concat(
+                            commonClArgs
+                                .Select(it => it.Value)
+                        )
+                        .Concat(clFilesList)
+                        .ToArray()
+                );
+
+                return exitCode;
+            }
             else
             {
-                // Build ARM64 COFF
-                var arm64Obj = tempFileHelper.GetTempFile("arm64.obj");
-                exitCode = _clExe.RunCL(
-                    clArgs
-                        .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
-                        .Select(it => it.Value)
-                        .Append($"/Fo{arm64Obj}")
-                        .Append("/c")
-                        .ToArray()
-                );
+                var clFilesList = new List<string>();
 
-                if (exitCode != 0)
+                var commonClArgs = clArgs
+                    .Where(it => true
+                        && it.Fo.Length == 0
+                        && !it.FileInput
+                        && !it.Arm64EC
+                    );
+
+                var clFileArgs = clArgs
+                    .Where(it => it.FileInput)
+                    .ToArray();
+
+                foreach (var fileArg in clFileArgs)
                 {
-                    Console.Error.WriteLine("Compile ARM64 obj failed.");
-                    return exitCode;
+                    var objFileName = _normHelper.Norm(Path.GetFileName(fileArg.Value));
+
+                    switch (_decideCLTargetTypeHelper.Decide(fileArg.Value) ?? CLTargetType.Other)
+                    {
+                        case CLTargetType.SourceFile:
+                            {
+                                {
+                                    // Build ARM64 COFF
+                                    var arm64Obj = tempFileHelper.GetTempFile($"{objFileName}.arm64.obj");
+                                    exitCode = _clExe.RunCL(
+                                        commonClArgs
+                                            .Select(it => it.Value)
+                                            .Append($"/Fo{arm64Obj}")
+                                            .Append("/c")
+                                            .Append(fileArg.Value)
+                                            .ToArray()
+                                    );
+
+                                    if (exitCode != 0)
+                                    {
+                                        Console.Error.WriteLine("Compile ARM64 obj failed.");
+                                        return exitCode;
+                                    }
+
+                                    if (!File.Exists(arm64Obj))
+                                    {
+                                        Console.Error.WriteLine("No ARM64 obj generated.");
+                                        return 1;
+                                    }
+
+                                    clFilesList.Add(arm64Obj);
+                                }
+
+                                {
+                                    // Build ARM64EC COFF
+                                    var arm64ECObj = tempFileHelper.GetTempFile($"{objFileName}.arm64EC.obj");
+                                    exitCode = _clExe.RunCL(
+                                        commonClArgs
+                                            .Select(it => it.Value)
+                                            .Append($"/Fo{arm64ECObj}")
+                                            .Append($"/arm64EC")
+                                            .Append("/c")
+                                            .Append(fileArg.Value)
+                                            .ToArray()
+                                    );
+
+                                    if (exitCode != 0)
+                                    {
+                                        Console.Error.WriteLine("Compile ARM64EC obj failed.");
+                                        return exitCode;
+                                    }
+
+                                    if (!File.Exists(arm64ECObj))
+                                    {
+                                        Console.Error.WriteLine("No ARM64EC obj generated.");
+                                        return 1;
+                                    }
+
+                                    clFilesList.Add(arm64ECObj);
+                                }
+                                break;
+                            }
+                        case CLTargetType.Arm64XCoffUponX86Coff:
+                            {
+                                var file = File.ReadAllBytes(fileArg.Value);
+                                var coff = CoffParser.Parse(file, true);
+
+                                {
+                                    var arm64Obj = tempFileHelper.GetTempFile($"{objFileName}.ARM64.obj");
+
+                                    File.WriteAllBytes(
+                                        arm64Obj,
+                                        CoffParser.ReadRawData(
+                                            file,
+                                            coff.Sections
+                                                .Single(it => it.Name == "AA64.obj")
+                                        )
+                                            .ToArray()
+                                    );
+
+                                    clFilesList.Add(arm64Obj);
+                                }
+
+                                {
+                                    var arm64ECObj = tempFileHelper.GetTempFile($"{objFileName}.ARM64EC.obj");
+
+                                    File.WriteAllBytes(
+                                        arm64ECObj,
+                                        CoffParser.ReadRawData(
+                                            file,
+                                            coff.Sections
+                                                .Single(it => it.Name == "A641.obj")
+                                        )
+                                            .ToArray()
+                                    );
+
+                                    clFilesList.Add(arm64ECObj);
+                                }
+
+                                break;
+                            }
+                        default:
+                            {
+                                clFilesList.Add(fileArg.Value);
+                                break;
+                            }
+                    }
                 }
 
-                // Build ARM64EC COFF
-                var arm64ECObj = tempFileHelper.GetTempFile("arm64ec.obj");
-                exitCode = _clExe.RunCL(
-                    clArgs
-                        .Where(it => it.Fo.Length == 0 && !it.Arm64EC)
-                        .Select(it => it.Value)
-                        .Append($"/Fo{arm64ECObj}")
-                        .Append($"/arm64EC")
-                        .Append("/c")
-                        .ToArray()
-                );
-
-                if (exitCode != 0)
+                if (commonClArgs.All(it => it.Fe.Length == 0) && clFileArgs.Any())
                 {
-                    Console.Error.WriteLine("Compile ARM64EC obj failed.");
-                    return exitCode;
+                    // EXE output file path not given
+                    var candidates = clFileArgs
+                        .Select(it => (CLTargetType: _decideCLTargetTypeHelper.Decide(it.Value), InputFile: it.Value))
+                        .ToArray();
+
+                    var hits = candidates.Where(
+                        it => false
+                            || it.CLTargetType == CLTargetType.Arm64Coff
+                            || it.CLTargetType == CLTargetType.Arm64ECCoff
+                            || it.CLTargetType == CLTargetType.Arm64XCoffUponX86Coff
+                        );
+
+                    var hit = hits.Any() ? hits.First() : candidates.First();
+
+                    var fileExtension = (commonClArgs.Any(it => it.LD || it.LDd)) ? ".dll" : ".exe";
+                    var outputFileName = Path.ChangeExtension(Path.GetFileName(hit.InputFile), fileExtension);
+
+                    clFilesList.Add($"/Fe{outputFileName}");
                 }
 
-                exitCode = _linkExe.RunLINK(
-                    linkArgs
-                        .Select(it => it.Value)
-                        .Append(arm64Obj)
-                        .Append(arm64ECObj)
+                exitCode = _clExe.RunCL(
+                    new string[0]
+                        .Concat(
+                            commonClArgs
+                                .Select(it => it.Value)
+                        )
+                        .Concat(clFilesList)
+                        .Append("/link")
+                        .Concat(
+                            linkArgs
+                                .Where(it => it.Machine.Length == 0)
+                                .Select(it => it.Value)
+                                .Append("/machine:ARM64X")
+                        )
                         .ToArray()
                 );
 
-                return 0;
+                return exitCode;
             }
         }
     }

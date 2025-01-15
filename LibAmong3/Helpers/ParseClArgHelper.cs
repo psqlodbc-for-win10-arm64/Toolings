@@ -33,15 +33,43 @@ namespace LibAmong3.Helpers
                 }
                 else if (opt.StartsWith("fd:", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    return new CLArg(arg, Pdb: opt.Substring(3));
+                    return new CLArg(arg, Fd: opt.Substring(3));
+                }
+                else if (opt.StartsWith("fe:", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return new CLArg(arg, Fe: opt.Substring(3));
                 }
                 else if (opt.StartsWith("fd", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    return new CLArg(arg, Pdb: opt.Substring(2));
+                    return new CLArg(arg, Fd: opt.Substring(2));
+                }
+                else if (opt.StartsWith("fe", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return new CLArg(arg, Fe: opt.Substring(2));
                 }
                 else if (string.Compare(opt, "showIncludes", true) == 0)
                 {
                     return new CLArg(arg, ShowIncludes: true);
+                }
+                else if (string.Compare(opt, "LD", true) == 0)
+                {
+                    return new CLArg(arg, LD: true);
+                }
+                else if (string.Compare(opt, "LDd", true) == 0)
+                {
+                    return new CLArg(arg, LDd: true);
+                }
+                else if (string.Compare(opt, "E", true) == 0)
+                {
+                    return new CLArg(arg, E: true);
+                }
+                else if (string.Compare(opt, "EP", true) == 0)
+                {
+                    return new CLArg(arg, EP: true);
+                }
+                else if (string.Compare(opt, "P", true) == 0)
+                {
+                    return new CLArg(arg, P: true);
                 }
                 else
                 {
@@ -50,7 +78,7 @@ namespace LibAmong3.Helpers
             }
             else
             {
-                return new CLArg(arg);
+                return new CLArg(arg, FileInput: true);
             }
         }
     }
