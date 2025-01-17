@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arm64XSingleLibLIB", "Arm64
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arm64XSingleLibLINK", "Arm64XSingleLibLINK\Arm64XSingleLibLINK.csproj", "{D50F8228-B22A-4D5B-BE03-3144C102E5D2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arm64XDualObjAR", "Arm64XDualObjAR\Arm64XDualObjAR.csproj", "{65FF1039-B6FE-415E-8945-B79A0C574F6F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +65,10 @@ Global
 		{D50F8228-B22A-4D5B-BE03-3144C102E5D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D50F8228-B22A-4D5B-BE03-3144C102E5D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D50F8228-B22A-4D5B-BE03-3144C102E5D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65FF1039-B6FE-415E-8945-B79A0C574F6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65FF1039-B6FE-415E-8945-B79A0C574F6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65FF1039-B6FE-415E-8945-B79A0C574F6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65FF1039-B6FE-415E-8945-B79A0C574F6F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -3,6 +3,7 @@ using LibAmong3.Helpers;
 using NUnit.Framework;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace LibAmong3.Tests
@@ -330,6 +331,100 @@ namespace LibAmong3.Tests
                     //}
 
                     {
+                        // <Object /> elements including obj files must be replaced with <Library /> elements respectively.
+
+                        // <Object Include="..\..\src\backend\22e3565@@postgres_lib@sta\access_brin_brin.c.obj" />
+                        // <Library Include="..\..\src\backend\postgres_lib.a" />
+
+                        var Objects = xml
+                            .Elements(msbuild + "Project")
+                            .Elements(msbuild + "ItemGroup")
+                            .Elements(msbuild + "Object")
+                            .Where(it => it.Attribute("Include")?.Value?.EndsWith(".obj") ?? false)
+                            .ToArray()
+                            ;
+
+                        foreach (var one in Objects)
+                        {
+                            var include = one.Attribute("Include")!.Value!;
+
+                            // \22e3565@@postgres_lib@sta\access_brin_brin.c.obj
+                            var library = Regex.Replace(
+                                include,
+                                "[0-9a-f]+@@(?<aname>[0-9a-z_]+)@sta\\.+?\\.obj$",
+                                match => $"{match.Groups["aname"].Value}.a",
+                                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                            );
+
+                            if (library == include)
+                            {
+                                // if equals, it's not a obj file.
+                            }
+                            else
+                            {
+                                if (one.Parent!
+                                    .Elements(msbuild + "Library")
+                                    .Any(it => it.Attribute("Include")?.Value == library)
+                                )
+                                {
+                                    // already
+                                    one.Remove();
+                                    anyChanges = true;
+                                }
+                                else
+                                {
+                                    one.AddAfterSelf(
+                                        new XElement(
+                                            msbuild + "Library"
+                                            , new XAttribute("Include", library)
+                                        )
+                                    );
+                                    one.Remove();
+                                    anyChanges = true;
+                                }
+                            }
+                        }
+                    }
+
+                    {
+                        // <ProjectConfiguration Include="debug|arm64"> and debug|arm64ec must be removed.
+                        // It causes horrible lib generated.
+
+                        // lib /list V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release\src\common\libpgcommon.a
+                        // 
+                        // Microsoft (R) Library Manager Version 14.42.34436.0
+                        // Copyright (C) Microsoft Corporation.  All rights reserved.
+                        // 
+                        // 349de3c@@libpgcommon@sta\release_arm64\archive.c.obj
+                        // 349de3c@@libpgcommon@sta\release_arm64\base64.c.obj
+                        // ...
+                        // V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release\src\common\349de3c@@libpgcommon@sta\release_arm64ec\archive.c.obj
+                        // V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release\src\common\349de3c@@libpgcommon@sta\release_arm64ec\base64.c.obj
+                        // V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release\src\common\349de3c@@libpgcommon@sta\release_arm64ec\sprompt.c.obj
+                        // V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release\src\common\349de3c@@libpgcommon@sta\release_arm64ec\logging.c.obj
+                        // 349de3c@@libpgcommon_config_info@sta\debug_arm64\config_info.c.obj
+                        // 349de3c@@libpgcommon_ryu@sta\debug_arm64\f2s.c.obj
+                        // 349de3c@@libpgcommon_ryu@sta\debug_arm64\d2s.c.obj
+
+                        var ProjectConfiguration = xml
+                            .Elements(msbuild + "Project")
+                            .Elements(msbuild + "ItemGroup")
+                            .Elements(msbuild + "ProjectConfiguration")
+                            .Where(it => false
+                                || (it.Attribute("Include")?.Value == "debug|arm64")
+                                || (it.Attribute("Include")?.Value == "debug|arm64ec")
+                            )
+                            .ToArray()
+                        ;
+
+                        foreach (var one in ProjectConfiguration)
+                        {
+                            one.Remove();
+                            anyChanges = true;
+                        }
+                    }
+
+                    {
                         // For StaticLibrary vcxprojs, `<EmbedManifest>false</EmbedManifest>` must not exist.
                         //
                         // Otherwise it causes terrible build errors.
@@ -474,6 +569,25 @@ namespace LibAmong3.Tests
                     ;
 
                 File.WriteAllText(slnFile, body, new UTF8Encoding(true));
+            }
+        }
+
+        [Test]
+        public void SearchForLibsHavingDebugArm64Objs()
+        {
+            var slnDir = @"V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release";
+
+            foreach (var libFile in new string[0]
+                .Concat(Directory.GetFiles(slnDir, "*.a", SearchOption.AllDirectories))
+                .Concat(Directory.GetFiles(slnDir, "*.lib", SearchOption.AllDirectories))
+            )
+            {
+                var body = Encoding.Latin1.GetString(File.ReadAllBytes(libFile));
+                var hit = body.Contains("\\debug_arm64\\");
+                if (hit)
+                {
+                    Console.WriteLine(libFile);
+                }
             }
         }
     }

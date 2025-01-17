@@ -12,6 +12,7 @@ namespace LibAmong3.Helpers
     {
         public static IServiceCollection AddLibAmong3(this IServiceCollection services)
         {
+            services.AddSingleton<Arm64XARHelper>();
             services.AddSingleton<Arm64XCLHelper>();
             services.AddSingleton<Arm64XLIBHelper>();
             services.AddSingleton<Arm64XLINKHelper>();

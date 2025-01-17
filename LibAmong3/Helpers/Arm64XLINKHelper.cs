@@ -10,6 +10,7 @@ namespace LibAmong3.Helpers
 {
     public class Arm64XLINKHelper
     {
+        private readonly WinCmdHelper _winCmdHelper;
         private readonly NormHelper _normHelper;
         private readonly Func<TempFileHelper> _newTempFileHelper;
         private readonly RunLINKHelper _linkExe;
@@ -19,8 +20,10 @@ namespace LibAmong3.Helpers
             ParseLinkArgHelper linkParser,
             RunLINKHelper linkExe,
             NormHelper normHelper,
-            Func<TempFileHelper> newTempFileHelper)
+            Func<TempFileHelper> newTempFileHelper,
+            WinCmdHelper winCmdHelper)
         {
+            _winCmdHelper = winCmdHelper;
             _normHelper = normHelper;
             _newTempFileHelper = newTempFileHelper;
             _linkExe = linkExe;
@@ -104,7 +107,8 @@ namespace LibAmong3.Helpers
                         atFile,
                         parseArgs.ParseArgs(File.ReadAllText(arg.At))
                             .Select(_linkParser.Parse)
-                            .SelectMany(ProcessLinkArg),
+                            .SelectMany(ProcessLinkArg)
+                            .Select(_winCmdHelper.EscapeArg),
                         new UTF8Encoding(true)
                     );
 

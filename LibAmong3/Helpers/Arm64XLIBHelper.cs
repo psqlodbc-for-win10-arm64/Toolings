@@ -34,6 +34,13 @@ namespace LibAmong3.Helpers
         {
             using var tempFileHelper = _newTempFileHelper();
 
+            if (args.Length == 1 && args[0]== "--version")
+            {
+                return _libExe.RunLIB(
+                    new string[] { "/?" }
+                );
+            }
+
             var libArgs = args
                 .Select(_libParser.Parse)
                 .ToArray();
