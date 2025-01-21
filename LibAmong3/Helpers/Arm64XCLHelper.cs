@@ -165,7 +165,12 @@ namespace LibAmong3.Helpers
                 exitCode = _clExe.RunCL(
                     new string[0]
                         .Concat(
-                            commonClArgs
+                            new CLArg[0]
+                                .Concat(commonClArgs)
+                                .Concat(
+                                    argList
+                                        .Where(it => it.Arm64EC)
+                                )
                                 .Select(it => it.Value)
                         )
                         .Concat(clFilesList)

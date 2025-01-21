@@ -35,52 +35,38 @@ namespace LibAmong3.Helpers
 
         public static IServiceCollection Add3Exes(this IServiceCollection services)
         {
-            string GetByEnvOr(string env, params string[] defaultExe)
+            string? GetFirstAvailOrNull(params Func<string?>?[] generators)
             {
-                var envExe = Environment.GetEnvironmentVariable(env);
-                if (string.IsNullOrWhiteSpace(envExe))
-                {
-                    foreach (var exe in defaultExe)
-                    {
-                        if (File.Exists(exe))
-                        {
-                            return exe;
-                        }
-                    }
-
-                    return defaultExe.Last();
-                }
-                else
-                {
-                    return envExe;
-                }
+                return generators
+                    .Select(gen => gen?.Invoke())
+                    .FirstOrDefault(exe => exe != null && File.Exists(exe));
             }
 
             services.AddSingleton(
                 sp => new CLExe(
-                    GetByEnvOr(
-                        "CL_EXE",
-                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe",
-                        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe"
-                    )
+                    GetFirstAvailOrNull(
+                        () => Environment.GetEnvironmentVariable("CL_EXE"),
+                        () => @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe",
+                        () => @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\cl.exe"
+                    ) ?? throw new Exception("CL.exe not found! Please set CL_EXE environment variable")
                 )
             );
             services.AddSingleton(
                 sp => new LinkExe(
-                    GetByEnvOr(
-                        "LINK_EXE",
-                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe",
-                        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe"
-                    )
+                    GetFirstAvailOrNull(
+                        () => Environment.GetEnvironmentVariable("LINK_EXE"),
+                        () => @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe",
+                        () => @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\link.exe"
+                    ) ?? throw new Exception("LINK.exe not found! Please set LINK_EXE environment variable")
                 )
             );
             services.AddSingleton(
                 sp => new LibExe(
-                    GetByEnvOr(
-                        "LIB_EXE",
-                        @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe",
-                        @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe"
-                    )
+                    GetFirstAvailOrNull(
+                        () => Environment.GetEnvironmentVariable("LIB_EXE"),
+                        () => @"C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe",
+                        () => @"H:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.42.34433\bin\Hostx64\arm64\lib.exe"
+                    ) ?? throw new Exception("LIB.exe not found! Please set LIB_EXE environment variable")
                 )
             );
 
