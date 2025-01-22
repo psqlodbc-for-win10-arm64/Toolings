@@ -19,5 +19,6 @@ namespace LibAmong3.Helpers.Guessr
         Arm64ECCoff,
         X64Coff,
         X86Coff,
+        Arm64XCoffUponX86Coff,
     }
 }

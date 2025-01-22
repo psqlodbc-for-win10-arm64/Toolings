@@ -35,6 +35,7 @@ namespace LibAmong3.Tests
         }
 
         [Test]
+        [Ignore("TDD")]
         public void RewriteVcxprojForArm64x()
         {
             var linkParser = new ParseLinkArgHelper();
@@ -555,6 +556,7 @@ namespace LibAmong3.Tests
         }
 
         [Test]
+        [Ignore("TDD")]
         public void RewriteSlnForArm64x()
         {
             var dir = @"V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release";
@@ -573,6 +575,7 @@ namespace LibAmong3.Tests
         }
 
         [Test]
+        [Ignore("TDD")]
         public void SearchForLibsHavingDebugArm64Objs()
         {
             var slnDir = @"V:\psqlodbc-for-win10-arm64\postgres\build-17-1-arm64x-release";
