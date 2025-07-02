@@ -17,6 +17,10 @@ namespace LibAmong3.Helpers.Guessr
             )
             {
                 if (false) { }
+                else if (coffMagic == 0x01C4)
+                {
+                    return Arm64XBinaryForm.Arm32Coff;
+                }
                 else if (coffMagic == 0xAA64)
                 {
                     return Arm64XBinaryForm.Arm64Coff;
@@ -61,6 +65,18 @@ namespace LibAmong3.Helpers.Guessr
                     {
                         return Arm64XBinaryForm.X86Coff;
                     }
+                }
+
+                if (true
+                    && coffMagic == 0x0000
+                    && 20 <= exe.Length
+                    && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(2, 2)) is ushort word2
+                    && word2 == 0xFFFF
+                    && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(4, 2)) is ushort word4
+                    && word4 == 0x0001
+                )
+                {
+                    return Arm64XBinaryForm.AnonymousCoff; // Skip leading 6 bytes to crop out an inner obj file.
                 }
             }
 
@@ -111,10 +127,14 @@ namespace LibAmong3.Helpers.Guessr
                     {
                         return Arm64XBinaryForm.X86;
                     }
+                    else if (machine == 0x1C4)
+                    {
+                        return Arm64XBinaryForm.Arm32;
+                    }
                 }
-
-                return Arm64XBinaryForm.Unknown;
             }
+
+            return Arm64XBinaryForm.Unknown;
         }
     }
 }
