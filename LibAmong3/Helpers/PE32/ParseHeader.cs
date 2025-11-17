@@ -10,6 +10,7 @@ namespace LibAmong3.Helpers.PE32
 {
     public class ParseHeader
     {
+        /// <seealso cref="https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-idata-section"/>
         public PEHeader Parse(ReadOnlyMemory<byte> exe)
         {
             if (true
