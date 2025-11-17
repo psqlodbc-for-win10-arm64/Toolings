@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Arm64XSingleLibLINK", "Arm6
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PkgConfigAlternative", "PkgConfigAlternative\PkgConfigAlternative.csproj", "{EA7A830D-9448-EABE-F839-198F578943B9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReadPEImportTable", "ReadPEImportTable\ReadPEImportTable.csproj", "{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,8 +71,15 @@ Global
 		{EA7A830D-9448-EABE-F839-198F578943B9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EA7A830D-9448-EABE-F839-198F578943B9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EA7A830D-9448-EABE-F839-198F578943B9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A8E58967-28B7-4D34-8184-90BC412FF2AF}
 	EndGlobalSection
 EndGlobal
