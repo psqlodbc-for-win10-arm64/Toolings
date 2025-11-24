@@ -23,5 +23,6 @@ namespace LibAmong3.Helpers.Guessr
         Arm32,
         Arm32Coff,
         AnonymousCoff,
+        Arm64XPureForwarder,
     }
 }

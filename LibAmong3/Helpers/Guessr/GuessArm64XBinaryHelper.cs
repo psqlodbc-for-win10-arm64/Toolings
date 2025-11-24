@@ -110,18 +110,31 @@ namespace LibAmong3.Helpers.Guessr
                     && ReadSectionNames(exe.Span.Slice(peOffset + 24 + optHeaderSize, 0x28 * numOfSections), numOfSections) is string[] sectionNames
                 )
                 {
-                    var a64xrm = true
-                        && sectionNames.Contains(".a64xrm")
-                        && sectionNames.Contains(".hexpthk");
+                    var a64xrm = sectionNames.Contains(".a64xrm");
+                    var hexpthk = sectionNames.Contains(".hexpthk");
 
                     if (false) { }
                     else if (machine == 0x8664)
                     {
-                        return a64xrm ? Arm64XBinaryForm.Arm64EC : Arm64XBinaryForm.X64;
+                        return (a64xrm && hexpthk) ? Arm64XBinaryForm.Arm64EC : Arm64XBinaryForm.X64;
                     }
                     else if (machine == 0xAA64)
                     {
-                        return a64xrm ? Arm64XBinaryForm.Arm64X : Arm64XBinaryForm.Arm64;
+                        if (a64xrm)
+                        {
+                            if (hexpthk)
+                            {
+                                return Arm64XBinaryForm.Arm64X;
+                            }
+                            else
+                            {
+                                return Arm64XBinaryForm.Arm64XPureForwarder;
+                            }
+                        }
+                        else
+                        {
+                            return Arm64XBinaryForm.Arm64;
+                        }
                     }
                     else if (machine == 0x14C)
                     {

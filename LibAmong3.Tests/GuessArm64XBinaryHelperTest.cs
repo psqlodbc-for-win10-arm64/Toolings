@@ -15,6 +15,7 @@ namespace LibAmong3.Tests
         [TestCase("arm64.dll", Arm64XBinaryForm.Arm64)]
         [TestCase("arm64ec.dll", Arm64XBinaryForm.Arm64EC)]
         [TestCase("arm64x.dll", Arm64XBinaryForm.Arm64X)]
+        [TestCase("foo.dll", Arm64XBinaryForm.Arm64XPureForwarder)]
         [TestCase("x64.dll", Arm64XBinaryForm.X64)]
         [TestCase("x86.dll", Arm64XBinaryForm.X86)]
         [TestCase("dllmain-arm32.obj", Arm64XBinaryForm.AnonymousCoff)]
