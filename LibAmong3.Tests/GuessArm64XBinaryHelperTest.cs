@@ -32,8 +32,29 @@ namespace LibAmong3.Tests
         }
 
         [Test]
+        [TestCase("arm32.dll", Arm64XBinaryForm.Arm32)]
+        [TestCase("arm64.dll", Arm64XBinaryForm.Arm64)]
+        [TestCase("arm64ec.dll", Arm64XBinaryForm.X64)]
+        [TestCase("arm64x.dll", Arm64XBinaryForm.Arm64)]
+        [TestCase("foo.dll", Arm64XBinaryForm.Arm64)]
+        [TestCase("x64.dll", Arm64XBinaryForm.X64)]
+        [TestCase("x86.dll", Arm64XBinaryForm.X86)]
+        [TestCase("dllmain-arm32.obj", Arm64XBinaryForm.AnonymousCoff)]
+        [TestCase("dllmain-arm64.obj", Arm64XBinaryForm.Arm64Coff)]
+        [TestCase("dllmain-arm64ec.obj", Arm64XBinaryForm.Arm64ECCoff)]
+        [TestCase("dllmain-x64.obj", Arm64XBinaryForm.X64Coff)]
+        [TestCase("dllmain-x86.obj", Arm64XBinaryForm.X86Coff)]
+        [TestCase("dllmain-arm64x.obj", Arm64XBinaryForm.X86Coff)]
+        public void GuessNative(string dllName, Arm64XBinaryForm nativeForm)
+        {
+            var bytes = File.ReadAllBytes($@"Files\{dllName}");
+            var guessr = new GuessArm64XBinaryHelper();
+            Assert.That(guessr.Guess(bytes, new Guess1Options { NoArm64XDetection = true, }), Is.EqualTo(nativeForm));
+        }
+
+        [Test]
         [TestCase("dllmain-arm32.obj", 6, Arm64XBinaryForm.Arm32Coff)]
-        public void Guess2(string dllName, int skipLeadingBytes, Arm64XBinaryForm form)
+        public void Guess_2(string dllName, int skipLeadingBytes, Arm64XBinaryForm form)
         {
             var bytes = File.ReadAllBytes($@"Files\{dllName}");
             var guessr = new GuessArm64XBinaryHelper();

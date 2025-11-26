@@ -9,8 +9,10 @@ namespace LibAmong3.Helpers.Guessr
 {
     public class GuessArm64XBinaryHelper
     {
-        public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe)
+        public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe, Guess1Options opts)
         {
+            var detectArm64X = !opts.NoArm64XDetection;
+
             if (true
                 && 2 <= exe.Length
                 && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span) is ushort coffMagic
@@ -49,6 +51,7 @@ namespace LibAmong3.Helpers.Guessr
                     }
 
                     if (true
+                        && detectArm64X
                         && 20 <= exe.Length
                         && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(2, 2)) is ushort numOfSections
                         && numOfSections == 2
@@ -116,11 +119,11 @@ namespace LibAmong3.Helpers.Guessr
                     if (false) { }
                     else if (machine == 0x8664)
                     {
-                        return (a64xrm && hexpthk) ? Arm64XBinaryForm.Arm64EC : Arm64XBinaryForm.X64;
+                        return (detectArm64X && a64xrm && hexpthk) ? Arm64XBinaryForm.Arm64EC : Arm64XBinaryForm.X64;
                     }
                     else if (machine == 0xAA64)
                     {
-                        if (a64xrm)
+                        if (detectArm64X && a64xrm)
                         {
                             if (hexpthk)
                             {
@@ -149,5 +152,11 @@ namespace LibAmong3.Helpers.Guessr
 
             return Arm64XBinaryForm.Unknown;
         }
+
+        public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe)
+        {
+            return Guess(exe, new Guess1Options { });
+        }
+
     }
 }
