@@ -55,12 +55,12 @@ namespace ReadPEImportTable
             var exe = File.ReadAllBytes(filePath);
             var header = new ParseHeader().Parse(exe);
             var importTable = new ParseImportTable().Parse(
-                provide: new VAReadOnlyMemoryProvider(
+                provide: new VAReadOnlySpanProvider(
                     Exe: exe,
                     Sections: header.Sections
                 )
                     .Provide,
-                virtualAddress: header.ImageDataDirectories[1].VirtualAddress,
+                virtualAddress: header.GetImageDirectoryOrEmpty(1).VirtualAddress,
                 isPE32Plus: header.IsPE32Plus
             );
             return importTable;

@@ -10,7 +10,7 @@ namespace LibAmong3.Helpers.PE32
     public class ParseImportTable
     {
         public IReadOnlyList<PEIData.Directory> Parse(
-            ProvideReadOnlyMemoryDelegate provide,
+            ProvideReadOnlySpanDelegate provide,
             int virtualAddress,
             bool isPE32Plus)
         {
@@ -19,7 +19,7 @@ namespace LibAmong3.Helpers.PE32
             {
                 var ptr = provide(virtualAddress + 20 * cy, 20);
 
-                if (BinaryPrimitives.ReadInt32LittleEndian(ptr.Span) == 0)
+                if (BinaryPrimitives.ReadInt32LittleEndian(ptr) == 0)
                 {
                     break;
                 }
@@ -31,7 +31,7 @@ namespace LibAmong3.Helpers.PE32
 
             for (int y = 0; y < cy; y++)
             {
-                var span = provide(virtualAddress + 20 * y, 20).Span;
+                var span = provide(virtualAddress + 20 * y, 20);
 
                 var dllNameOffset = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(12, 4));
 
@@ -43,7 +43,7 @@ namespace LibAmong3.Helpers.PE32
                     ),
                     Timestamp: BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(4, 4)),
                     ForwarderChain: BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(8, 4)),
-                    DLLName: ReadCString(provide, dllNameOffset),
+                    DLLName: ReadCStringHelper.ReadCString(provide, dllNameOffset),
                     ImportAddrs: ReadImport(
                         provide: provide,
                         virtualAddress: BinaryPrimitives.ReadInt32LittleEndian(span.Slice(16, 4)),
@@ -56,7 +56,7 @@ namespace LibAmong3.Helpers.PE32
         }
 
         private IReadOnlyList<PEIData.Import> ReadImport(
-            ProvideReadOnlyMemoryDelegate provide,
+            ProvideReadOnlySpanDelegate provide,
             int virtualAddress,
             bool isPE32Plus
         )
@@ -68,7 +68,7 @@ namespace LibAmong3.Helpers.PE32
                 while (true)
                 {
                     int entryOffset = virtualAddress + 8 * cx;
-                    if (BinaryPrimitives.ReadInt64LittleEndian(provide(entryOffset, 8).Span) == 0)
+                    if (BinaryPrimitives.ReadInt64LittleEndian(provide(entryOffset, 8)) == 0)
                     {
                         break;
                     }
@@ -80,7 +80,7 @@ namespace LibAmong3.Helpers.PE32
                 for (int x = 0; x < cx; x++)
                 {
                     int entryOffset = virtualAddress + 8 * x;
-                    var importEntry = BinaryPrimitives.ReadInt64LittleEndian(provide(entryOffset, 8).Span);
+                    var importEntry = BinaryPrimitives.ReadInt64LittleEndian(provide(entryOffset, 8));
                     if (importEntry < 0)
                     {
                         imports[x] = new PEIData.Import(
@@ -93,8 +93,8 @@ namespace LibAmong3.Helpers.PE32
                     else
                     {
                         int hintNameOffset = (int)importEntry;
-                        ushort hint = BinaryPrimitives.ReadUInt16LittleEndian(provide(hintNameOffset, 2).Span);
-                        string name = ReadCString(provide, hintNameOffset + 2);
+                        ushort hint = BinaryPrimitives.ReadUInt16LittleEndian(provide(hintNameOffset, 2));
+                        string name = ReadCStringHelper.ReadCString(provide, hintNameOffset + 2);
                         imports[x] = new PEIData.Import(
                             IsOrdinal: false,
                             Ordinal: 0,
@@ -114,7 +114,7 @@ namespace LibAmong3.Helpers.PE32
                 {
                     int entryOffset = virtualAddress + 4 * cx;
 
-                    if (BinaryPrimitives.ReadInt32LittleEndian(provide(entryOffset, 4).Span) == 0)
+                    if (BinaryPrimitives.ReadInt32LittleEndian(provide(entryOffset, 4)) == 0)
                     {
                         break;
                     }
@@ -127,7 +127,7 @@ namespace LibAmong3.Helpers.PE32
                 for (int x = 0; x < cx; x++)
                 {
                     int entryOffset = virtualAddress + 4 * x;
-                    var importEntry = BinaryPrimitives.ReadInt32LittleEndian(provide(entryOffset, 4).Span);
+                    var importEntry = BinaryPrimitives.ReadInt32LittleEndian(provide(entryOffset, 4));
                     if (importEntry < 0)
                     {
                         imports[x] = new PEIData.Import(
@@ -140,8 +140,8 @@ namespace LibAmong3.Helpers.PE32
                     else
                     {
                         int hintNameOffset = importEntry;
-                        ushort hint = BinaryPrimitives.ReadUInt16LittleEndian(provide(hintNameOffset, 2).Span);
-                        string name = ReadCString(provide, hintNameOffset + 2);
+                        ushort hint = BinaryPrimitives.ReadUInt16LittleEndian(provide(hintNameOffset, 2));
+                        string name = ReadCStringHelper.ReadCString(provide, hintNameOffset + 2);
                         imports[x] = new PEIData.Import(
                             IsOrdinal: false,
                             Ordinal: 0,
@@ -152,29 +152,6 @@ namespace LibAmong3.Helpers.PE32
                 }
 
                 return imports;
-            }
-        }
-
-        private string ReadCString(
-            ProvideReadOnlyMemoryDelegate provide,
-            int offset,
-            int maxLength = 256
-        )
-        {
-            int length = 0;
-
-            var span = provide(offset, -maxLength).Span;
-
-            while (true)
-            {
-                if (span[length] == 0)
-                {
-                    return Encoding.Latin1.GetString(provide(offset, length).Span);
-                }
-                else
-                {
-                    length += 1;
-                }
             }
         }
     }

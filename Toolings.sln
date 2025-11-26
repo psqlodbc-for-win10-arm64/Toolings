@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PkgConfigAlternative", "Pkg
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReadPEImportTable", "ReadPEImportTable\ReadPEImportTable.csproj", "{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReadPEExportTable", "ReadPEExportTable\ReadPEExportTable.csproj", "{EC360EF7-6FB5-4379-A7D8-DFAE6650E697}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -75,6 +77,10 @@ Global
 		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A2E103BE-02DF-40BB-A54D-8D4ADA8DDF9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC360EF7-6FB5-4379-A7D8-DFAE6650E697}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC360EF7-6FB5-4379-A7D8-DFAE6650E697}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC360EF7-6FB5-4379-A7D8-DFAE6650E697}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC360EF7-6FB5-4379-A7D8-DFAE6650E697}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

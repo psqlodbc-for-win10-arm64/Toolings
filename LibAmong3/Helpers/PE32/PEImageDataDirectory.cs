@@ -10,5 +10,6 @@ namespace LibAmong3.Helpers.PE32
         int VirtualAddress,
         int Size)
     {
+        public static readonly PEImageDataDirectory Empty = new PEImageDataDirectory(0, 0);
     }
 }

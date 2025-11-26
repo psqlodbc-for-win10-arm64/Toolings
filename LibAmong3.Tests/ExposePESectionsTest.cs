@@ -41,13 +41,13 @@ namespace LibAmong3.Tests
         [TestCase("x86/ImportDummy.exe")]
         public void ParseImportTableTest(string dllName)
         {
-            var bytes = File.ReadAllBytes($@"Files\{dllName}");
+            var bytes = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Files", dllName));
             var exposePESections = new ParseHeader();
             var header = exposePESections.Parse(bytes);
             var importTable = header.ImageDataDirectories[1];
             var parseImportTable = new ParseImportTable();
             var directories = parseImportTable.Parse(
-                provide: new VAReadOnlyMemoryProvider(
+                provide: new VAReadOnlySpanProvider(
                     bytes,
                     header.Sections
                 )
@@ -62,6 +62,39 @@ namespace LibAmong3.Tests
                 foreach (var import in directory.ImportRefs)
                 {
                     Console.WriteLine($"  Import: {import}");
+                }
+            }
+        }
+
+        [Test]
+        [TestCase("arm64/ExportDummy.dll")]
+        [TestCase("arm64ec/ExportDummy.dll")]
+        [TestCase("arm64x/ExportDummy.dll")]
+        [TestCase("x64/ExportDummy.dll")]
+        [TestCase("x86/ExportDummy.dll")]
+        public void ParseExportTableTest(string dllName)
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Files", dllName));
+            var exposePESections = new ParseHeader();
+            var header = exposePESections.Parse(bytes);
+            var exportTable = header.ImageDataDirectories[0];
+            var parseExportTable = new ParseExportTable();
+            var provider = new VAReadOnlySpanProvider(
+                bytes,
+                header.Sections
+            );
+            var directory = parseExportTable.Parse(
+                provide: provider.Provide,
+                virtualAddress: exportTable.VirtualAddress,
+                isPE32Plus: header.IsPE32Plus
+            );
+            {
+                Console.WriteLine($"DLL Name: {directory.DLLName}");
+                {
+                    foreach (var (export, ordinal) in directory.ExportNames.Zip(directory.OrdinalTable))
+                    {
+                        Console.WriteLine($"  Export: {export} (Ordinal: {directory.BaseOrdinal + ordinal})");
+                    }
                 }
             }
         }

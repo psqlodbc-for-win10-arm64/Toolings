@@ -12,5 +12,11 @@ namespace LibAmong3.Helpers.PE32
         bool IsPE32Plus,
         IReadOnlyList<PEImageDataDirectory> ImageDataDirectories)
     {
+        public PEImageDataDirectory GetImageDirectoryOrEmpty(int index)
+        {
+            return (index < ImageDataDirectories.Count)
+                ? ImageDataDirectories[index]
+                : PEImageDataDirectory.Empty;
+        }
     }
 }
