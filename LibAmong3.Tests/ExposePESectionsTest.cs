@@ -141,7 +141,7 @@ namespace LibAmong3.Tests
         }
 
         [Test]
-        //[Ignore("Private use")]
+        [Ignore("Private use")]
         public void Scan()
         {
             void ScanDir(string dir)
