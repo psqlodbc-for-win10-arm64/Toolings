@@ -2,6 +2,7 @@
 using LibAmong3.Helpers.PE32;
 using NUnit.Framework;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -44,7 +45,7 @@ namespace LibAmong3.Tests
             var bytes = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Files", dllName));
             var exposePESections = new ParseHeader();
             var header = exposePESections.Parse(bytes);
-            var importTable = header.ImageDataDirectories[1];
+            var importTable = header.GetImageDirectoryOrEmpty(1);
             var parseImportTable = new ParseImportTable();
             var directories = parseImportTable.Parse(
                 provide: new VAReadOnlySpanProvider(
@@ -77,7 +78,7 @@ namespace LibAmong3.Tests
             var bytes = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Files", dllName));
             var exposePESections = new ParseHeader();
             var header = exposePESections.Parse(bytes);
-            var exportTable = header.ImageDataDirectories[0];
+            var exportTable = header.GetImageDirectoryOrEmpty(0);
             var parseExportTable = new ParseExportTable();
             var provider = new VAReadOnlySpanProvider(
                 bytes,
@@ -97,6 +98,103 @@ namespace LibAmong3.Tests
                     }
                 }
             }
+        }
+
+        [Test]
+        [TestCase("arm64x/ExportDummy.dll")]
+        [TestCase("x64/ExportDummy.dll")]
+        [TestCase("x86/ExportDummy.dll")]
+        //[TestCase(@"V:\psqlodbc-for-win10-arm64\openssl-arm64x-release-2-inst\Program Files\OpenSSL\bin\libssl-3-arm64.dll")]
+        //[TestCase(@"C:\BUFFALO\kokiinst_200\Win\Launcher.exe")] // 0x014C,72
+        //[TestCase(@"C:\Program Files (x86)\Common Files\Microsoft Shared\Phone Tools\12.0\Debugger\target\x86\clrcompression.dll")] // 0x014C,92
+        //[TestCase(@"C:\Program Files (x86)\Common Files\Microsoft Shared\Phone Tools\14.0\Debugger\target\x86\dxcap.exe")] // 0x014C,104
+        //[TestCase(@"C:\Windows\SysWOW64\mrt100.dll")] // 0x014C,124
+        //[TestCase(@"C:\Program Files (x86)\Windows Kits\10\bin\10.0.14393.0\x86\GenXBF.dll")] // 0x014C,128
+        //[TestCase(@"C:\Program Files (x86)\Common Files\Microsoft Shared\Windows Phone Sirep\8.1\SirepClient.dll")] // 0x014C,152
+        //[TestCase(@"C:\BUFFALO\kokiinst_200\Win\driver\U3866D\Win10X86\RTUWPSrvcLib.dll")] // 0x014C,160
+        //[TestCase(@"C:\Program Files (x86)\Common Files\Adobe\ARM\1.0\AdobeARM.exe")] // 0x014C,164
+        //[TestCase(@"C:\Program Files (x86)\Common Files\Microsoft Shared\Filters\tifffilt.dll")] // 0x014C,172
+        //[TestCase(@"C:\Program Files (x86)\DB Browser for SQLite\Qt5Concurrent.dll")] // 0x014C,184
+        //[TestCase(@"C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\acrocef_3\RdrCEF.exe")] // 0x014C,188
+        //[TestCase(@"C:\Program Files (x86)\Common Files\MariaDBShared\HeidiSQL\libmariadb.dll")] // 0x014C,192
+        //[TestCase(@"C:\Program Files (x86)\Application Verifier\vrfauto.dll")] // 0x014C,196
+        //[TestCase(@"C:\BUFFALO\kokiinst_200\Win\driver\U2866D\Win8\WdfCoInstaller01011920064.dll")] // 0x8664,112
+        public void ParseLoadConfigDirTest(string dllName)
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Files", dllName));
+            var exposePESections = new ParseHeader();
+            var header = exposePESections.Parse(bytes);
+            var loadConfigDir = header.GetImageDirectoryOrEmpty(10);
+            var parser = new ParseLoadConfigDir();
+            var provider = new VAReadOnlySpanProvider(
+                bytes,
+                header.Sections
+            );
+            File.WriteAllBytes(Path.GetFileName(dllName.Replace("/", "_")) + ".bin", provider.Provide(loadConfigDir.VirtualAddress, loadConfigDir.Size).ToArray());
+            var parsed = parser.Parse(
+                provide: provider.Provide,
+                virtualAddress: loadConfigDir.VirtualAddress,
+                isPE32Plus: header.IsPE32Plus
+            );
+            Console.Write(parsed);
+        }
+
+        [Test]
+        [Ignore("Private use")]
+        public void Scan()
+        {
+            void ScanDir(string dir)
+            {
+                foreach (var subDir in Directory.GetDirectories(dir))
+                {
+                    try
+                    {
+                        ScanDir(subDir);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[!] Could not access directory: {subDir}: {ex.Message}");
+                    }
+                }
+
+                foreach (var file in Directory.GetFiles(dir)
+                    .Where(
+                        name => false
+                            || name.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase)
+                            || name.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase)
+                            || name.EndsWith(".ocx", StringComparison.InvariantCultureIgnoreCase)
+                    )
+                )
+                {
+                    try
+                    {
+                        if (1024 * 1024 * 256 <= new FileInfo(file).Length)
+                        {
+                            continue;
+                        }
+
+                        var bytes = File.ReadAllBytes(file);
+                        var exposePESections = new ParseHeader();
+                        var header = exposePESections.Parse(bytes);
+                        var loadConfigDir = header.GetImageDirectoryOrEmpty(10);
+                        if (4 <= loadConfigDir.Size)
+                        {
+                            var provider = new VAReadOnlySpanProvider(
+                                bytes,
+                                header.Sections
+                            );
+                            var size = BinaryPrimitives.ReadInt32LittleEndian(provider.Provide(loadConfigDir.VirtualAddress, 4));
+                            Console.WriteLine($"0x{header.Machine:X4},{size},\"{file}\"");
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore errors
+                    }
+                }
+            }
+
+            ScanDir(@"C:\");
         }
     }
 }

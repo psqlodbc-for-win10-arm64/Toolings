@@ -95,6 +95,9 @@ namespace ReadPEExportTable
             return 0;
         }
 
+        /// <param name="ExportName">e.g. `Ordinal_1000`, `BitBlt`</param>
+        /// <param name="Ordinal">Absolute ordinal (BaseOrdinal added)</param>
+        /// <param name="Forwarder">e.g. (empty), `NTDLL.RtlAllocateHeap`</param>
         private record ExportEntry(string ExportName, uint Ordinal, string Forwarder);
 
         private delegate string GetForwarderFromRVADelegate(uint rva);
