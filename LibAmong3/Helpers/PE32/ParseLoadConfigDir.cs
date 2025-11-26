@@ -17,7 +17,10 @@ namespace LibAmong3.Helpers.PE32
         )
         {
             var size = BinaryPrimitives.ReadInt32LittleEndian(provide(virtualAddress, 4));
-            var span = provide(virtualAddress, size).Slice(4);
+            var sizeFixedUp = (!isPE32Plus && size == 0)
+                ? 64
+                : size;
+            var span = provide(virtualAddress, sizeFixedUp).Slice(4);
             var header1 = new PELoadConfigDir.HeaderType1(
                 Size: (uint)size,
                 TimeDateStamp: ReadHelper.U32(ref span),
@@ -37,8 +40,8 @@ namespace LibAmong3.Helpers.PE32
                 DependentLoadFlags: ReadHelper.U16(ref span),
                 EditList: isPE32Plus ? ReadHelper.U64(ref span) : ReadHelper.U32(ref span),
                 SecurityCookie: isPE32Plus ? ReadHelper.U64(ref span) : ReadHelper.U32(ref span),
-                SEHandlerTable: isPE32Plus ? ReadHelper.U64(ref span) : ReadHelper.U32(ref span),
-                SEHandlerCount: isPE32Plus ? ReadHelper.U64(ref span) : ReadHelper.U32(ref span),
+                SEHandlerTable: isPE32Plus ? ReadHelper.U64(ref span) : ReadHelper.U32OrZero(ref span),
+                SEHandlerCount: isPE32Plus ? ReadHelper.U64(ref span) : ReadHelper.U32OrZero(ref span),
                 GuardCFCheckFunctionPointer: isPE32Plus ? ReadHelper.U64OrZero(ref span) : ReadHelper.U32OrZero(ref span),
                 GuardCFDispatchFunctionPointer: isPE32Plus ? ReadHelper.U64OrZero(ref span) : ReadHelper.U32OrZero(ref span),
                 GuardCFFunctionTable: isPE32Plus ? ReadHelper.U64OrZero(ref span) : ReadHelper.U32OrZero(ref span),

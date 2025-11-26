@@ -119,6 +119,7 @@ namespace LibAmong3.Tests
         //[TestCase(@"C:\Program Files (x86)\Common Files\MariaDBShared\HeidiSQL\libmariadb.dll")] // 0x014C,192
         //[TestCase(@"C:\Program Files (x86)\Application Verifier\vrfauto.dll")] // 0x014C,196
         //[TestCase(@"C:\BUFFALO\kokiinst_200\Win\driver\U2866D\Win8\WdfCoInstaller01011920064.dll")] // 0x8664,112
+        //[TestCase(@"H:\Tmp\Windows NT Workstation 3.5\I386\kernel32.dll")] // 0x014C,0,64
         public void ParseLoadConfigDirTest(string dllName)
         {
             var bytes = File.ReadAllBytes(Path.Combine(TestContext.CurrentContext.WorkDirectory, "Files", dllName));
@@ -140,7 +141,7 @@ namespace LibAmong3.Tests
         }
 
         [Test]
-        [Ignore("Private use")]
+        //[Ignore("Private use")]
         public void Scan()
         {
             void ScanDir(string dir)
@@ -184,7 +185,7 @@ namespace LibAmong3.Tests
                                 header.Sections
                             );
                             var size = BinaryPrimitives.ReadInt32LittleEndian(provider.Provide(loadConfigDir.VirtualAddress, 4));
-                            Console.WriteLine($"0x{header.Machine:X4},{size},\"{file}\"");
+                            Console.WriteLine($"0x{header.Machine:X4},{size},{loadConfigDir.Size},\"{file}\"");
                         }
                     }
                     catch
@@ -194,7 +195,7 @@ namespace LibAmong3.Tests
                 }
             }
 
-            ScanDir(@"C:\");
+            ScanDir(@"H:\Tmp\Windows XP SP2 JA [OEM]");
         }
     }
 }

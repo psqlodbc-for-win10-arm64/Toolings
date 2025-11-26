@@ -15,7 +15,8 @@ namespace LibAmong3.Helpers.PE32
         /// <remarks>
         /// For known trunction patterns:
         /// 
-        /// - 0x014C,72
+        /// - 0x014C,0 (Windows NT Workstation 3.5)
+        /// - 0x014C,72 (Windows XP SP2 JA [OEM])
         /// - 0x014C,92
         /// - 0x014C,104
         /// - 0x014C,124
