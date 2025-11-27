@@ -11,7 +11,8 @@ namespace LibAmong3.Helpers.PE32
         IReadOnlyList<PESection> Sections,
         bool IsPE32Plus,
         IReadOnlyList<PEImageDataDirectory> ImageDataDirectories,
-        ulong ImageBase)
+        ulong ImageBase,
+        int MachineOffset)
     {
         public PEImageDataDirectory GetImageDirectoryOrEmpty(int index)
         {

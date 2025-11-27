@@ -23,6 +23,7 @@ namespace LibAmong3.Helpers.PE32
                 && exe.Span[peOffset + 0] == 0x50
                 && exe.Span[peOffset + 1] == 0x45
                 && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 4, 2)) is ushort machine
+                && peOffset + 4 is int machineOffset
                 && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 6, 2)) is ushort numOfSections
                 && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 0x14, 2)) is ushort optHeaderSize
                 && peOffset + 24 + optHeaderSize + 0x28 * numOfSections <= exe.Length
@@ -32,7 +33,7 @@ namespace LibAmong3.Helpers.PE32
                 var optionalHeader = exe.Slice(peOffset + 24, optHeaderSize);
                 var isPE32Plus = false;
                 IReadOnlyList<PEImageDataDirectory> imageDataDirectories = Array.Empty<PEImageDataDirectory>();
-                ulong imageBase = 0;    
+                ulong imageBase = 0;
 
                 if (24 <= optHeaderSize)
                 {
@@ -77,7 +78,8 @@ namespace LibAmong3.Helpers.PE32
                     Sections: peSections,
                     IsPE32Plus: isPE32Plus,
                     ImageDataDirectories: imageDataDirectories,
-                    ImageBase: imageBase
+                    ImageBase: imageBase,
+                    MachineOffset: machineOffset
                 );
             }
             else

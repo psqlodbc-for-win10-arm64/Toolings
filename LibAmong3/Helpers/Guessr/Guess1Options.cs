@@ -14,8 +14,13 @@ namespace LibAmong3.Helpers.Guessr
         public bool DisableArm64XDetection { get; set; }
 
         /// <summary>
-        /// Use the presence of CHPE metadata pointer to identify Arm64X binaries.
+        /// Look at CHPE metadata version to help determine the binary form.
         /// </summary>
-        public bool SeeCHPEMetadataPointerForArm64X { get; set; }
+        public bool LookAtCHPEMetadataVersion { get; set; }
+
+        /// <summary>
+        /// Look at DVRT header to help determine the binary form.
+        /// </summary>
+        public bool LookAtDvrtHeader { get; set; }
     }
 }
