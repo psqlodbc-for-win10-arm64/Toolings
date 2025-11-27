@@ -32,6 +32,7 @@ namespace LibAmong3.Helpers.PE32
                 var optionalHeader = exe.Slice(peOffset + 24, optHeaderSize);
                 var isPE32Plus = false;
                 IReadOnlyList<PEImageDataDirectory> imageDataDirectories = Array.Empty<PEImageDataDirectory>();
+                ulong imageBase = 0;    
 
                 if (24 <= optHeaderSize)
                 {
@@ -42,6 +43,10 @@ namespace LibAmong3.Helpers.PE32
                     }
 
                     isPE32Plus = magic == 0x20B;
+
+                    imageBase = isPE32Plus
+                        ? BinaryPrimitives.ReadUInt64LittleEndian(optionalHeader.Span.Slice(24, 8))
+                        : BinaryPrimitives.ReadUInt32LittleEndian(optionalHeader.Span.Slice(28, 4));
 
                     var numberOfRvaAndSizes = BinaryPrimitives.ReadInt32LittleEndian(
                         isPE32Plus
@@ -71,7 +76,8 @@ namespace LibAmong3.Helpers.PE32
                     Machine: machine,
                     Sections: peSections,
                     IsPE32Plus: isPE32Plus,
-                    ImageDataDirectories: imageDataDirectories
+                    ImageDataDirectories: imageDataDirectories,
+                    ImageBase: imageBase
                 );
             }
             else

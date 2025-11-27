@@ -34,6 +34,27 @@ namespace LibAmong3.Tests
         [Test]
         [TestCase("arm32.dll", Arm64XBinaryForm.Arm32)]
         [TestCase("arm64.dll", Arm64XBinaryForm.Arm64)]
+        [TestCase("arm64ec.dll", Arm64XBinaryForm.Arm64EC)]
+        [TestCase("arm64x.dll", Arm64XBinaryForm.Arm64X)]
+        [TestCase("foo.dll", Arm64XBinaryForm.Arm64X)] // cannot figure out Arm64XPureForwarder
+        [TestCase("x64.dll", Arm64XBinaryForm.X64)]
+        [TestCase("x86.dll", Arm64XBinaryForm.X86)]
+        [TestCase("dllmain-arm32.obj", Arm64XBinaryForm.AnonymousCoff)]
+        [TestCase("dllmain-arm64.obj", Arm64XBinaryForm.Arm64Coff)]
+        [TestCase("dllmain-arm64ec.obj", Arm64XBinaryForm.Arm64ECCoff)]
+        [TestCase("dllmain-x64.obj", Arm64XBinaryForm.X64Coff)]
+        [TestCase("dllmain-x86.obj", Arm64XBinaryForm.X86Coff)]
+        [TestCase("dllmain-arm64x.obj", Arm64XBinaryForm.Arm64XCoffUponX86Coff)]
+        public void GuessByCHPE(string dllName, Arm64XBinaryForm form)
+        {
+            var bytes = File.ReadAllBytes($@"Files\{dllName}");
+            var guessr = new GuessArm64XBinaryHelper();
+            Assert.That(guessr.Guess(bytes, new Guess1Options { SeeCHPEMetadataPointerForArm64X = true, }), Is.EqualTo(form));
+        }
+
+        [Test]
+        [TestCase("arm32.dll", Arm64XBinaryForm.Arm32)]
+        [TestCase("arm64.dll", Arm64XBinaryForm.Arm64)]
         [TestCase("arm64ec.dll", Arm64XBinaryForm.X64)]
         [TestCase("arm64x.dll", Arm64XBinaryForm.Arm64)]
         [TestCase("foo.dll", Arm64XBinaryForm.Arm64)]

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LibAmong3.Helpers.PE32;
+using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +13,7 @@ namespace LibAmong3.Helpers.Guessr
         public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe, Guess1Options opts)
         {
             var detectArm64X = !opts.DisableArm64XDetection;
+            var seeCHPE = opts.SeeCHPEMetadataPointerForArm64X;
 
             if (true
                 && 2 <= exe.Length
@@ -107,31 +109,95 @@ namespace LibAmong3.Helpers.Guessr
                     && exe.Span[peOffset + 0] == 0x50
                     && exe.Span[peOffset + 1] == 0x45
                     && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 4, 2)) is ushort machine
-                    && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 6, 2)) is ushort numOfSections
-                    && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 0x14, 2)) is ushort optHeaderSize
-                    && peOffset + 24 + optHeaderSize + 0x28 * numOfSections <= exe.Length
-                    && ReadSectionNames(exe.Span.Slice(peOffset + 24 + optHeaderSize, 0x28 * numOfSections), numOfSections) is string[] sectionNames
                 )
                 {
-                    var a64xrm = sectionNames.Contains(".a64xrm");
-                    var hexpthk = sectionNames.Contains(".hexpthk");
+                    SectionNamesTested TestSectionNames()
+                    {
+                        if (true
+                            && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 6, 2)) is ushort numOfSections
+                            && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(peOffset + 0x14, 2)) is ushort optHeaderSize
+                            && peOffset + 24 + optHeaderSize + 0x28 * numOfSections <= exe.Length
+                            && ReadSectionNames(exe.Span.Slice(peOffset + 24 + optHeaderSize, 0x28 * numOfSections), numOfSections) is string[] sectionNames
+                        )
+                        {
+                            return new SectionNamesTested(
+                                a64xrm: sectionNames.Contains(".a64xrm"),
+                                hexpthk: sectionNames.Contains(".hexpthk")
+                            );
+                        }
+                        else
+                        {
+                            return new SectionNamesTested(
+                                a64xrm: false,
+                                hexpthk: false
+                            );
+                        }
+                    }
 
                     if (false) { }
                     else if (machine == 0x8664)
                     {
-                        return (detectArm64X && a64xrm && hexpthk) ? Arm64XBinaryForm.Arm64EC : Arm64XBinaryForm.X64;
-                    }
-                    else if (machine == 0xAA64)
-                    {
-                        if (detectArm64X && a64xrm)
+                        if (detectArm64X)
                         {
-                            if (hexpthk)
+                            if (seeCHPE)
                             {
-                                return Arm64XBinaryForm.Arm64X;
+                                if (GetChpeVersionOfPE(exe) == 2)
+                                {
+                                    return Arm64XBinaryForm.Arm64EC;
+                                }
+                                else
+                                {
+                                    return Arm64XBinaryForm.X64;
+                                }
                             }
                             else
                             {
-                                return Arm64XBinaryForm.Arm64XPureForwarder;
+                                var test = TestSectionNames();
+                                if (test.a64xrm && test.hexpthk)
+                                {
+                                    return Arm64XBinaryForm.Arm64EC;
+                                }
+                                else
+                                {
+                                    return Arm64XBinaryForm.X64;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            return Arm64XBinaryForm.X64;
+                        }
+                    }
+                    else if (machine == 0xAA64)
+                    {
+                        if (detectArm64X)
+                        {
+                            if (seeCHPE)
+                            {
+                                if (GetChpeVersionOfPE(exe) == 2)
+                                {
+                                    return Arm64XBinaryForm.Arm64X;
+                                }
+                                else
+                                {
+                                    return Arm64XBinaryForm.Arm64;
+                                }
+                            }
+                            else
+                            {
+                                var test = TestSectionNames();
+                                if (test.a64xrm && test.hexpthk)
+                                {
+                                    return Arm64XBinaryForm.Arm64X;
+                                }
+                                else if (test.a64xrm && !test.hexpthk)
+                                {
+                                    return Arm64XBinaryForm.Arm64XPureForwarder;
+                                }
+                                else
+                                {
+                                    return Arm64XBinaryForm.Arm64;
+                                }
                             }
                         }
                         else
@@ -151,6 +217,39 @@ namespace LibAmong3.Helpers.Guessr
             }
 
             return Arm64XBinaryForm.Unknown;
+        }
+
+        private record SectionNamesTested(
+            bool a64xrm,
+            bool hexpthk
+        );
+
+        private int GetChpeVersionOfPE(ReadOnlyMemory<byte> exe)
+        {
+            var parseHeader = new ParseHeader();
+            var header = parseHeader.Parse(exe);
+            var loadConfigDirEntry = header.GetImageDirectoryOrEmpty(10);
+            if (loadConfigDirEntry.Size != 0)
+            {
+                var parseLoadConfigDir = new ParseLoadConfigDir();
+                var provider = new VAReadOnlySpanProvider(
+                    exe,
+                    header.Sections
+                );
+                var loadConfigDir = parseLoadConfigDir.Parse(
+                    provide: provider.Provide,
+                    virtualAddress: loadConfigDirEntry.VirtualAddress,
+                    isPE32Plus: header.IsPE32Plus
+                );
+                var chpeMetadataPointer = loadConfigDir.Header1.CHPEMetadataPointer;
+                if (chpeMetadataPointer != 0)
+                {
+                    var versionSpan = provider.Provide(Convert.ToInt32(chpeMetadataPointer - header.ImageBase), 4);
+                    return BinaryPrimitives.ReadInt32LittleEndian(versionSpan);
+                }
+            }
+
+            return 0;
         }
 
         public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe)

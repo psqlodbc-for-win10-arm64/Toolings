@@ -101,6 +101,7 @@ namespace LibAmong3.Tests
         }
 
         [Test]
+        [TestCase("arm64ec/ExportDummy.dll")]
         [TestCase("arm64x/ExportDummy.dll")]
         [TestCase("x64/ExportDummy.dll")]
         [TestCase("x86/ExportDummy.dll")]
@@ -137,7 +138,13 @@ namespace LibAmong3.Tests
                 virtualAddress: loadConfigDir.VirtualAddress,
                 isPE32Plus: header.IsPE32Plus
             );
-            Console.Write(parsed);
+            Console.WriteLine(parsed);
+
+            if (parsed.Header1.CHPEMetadataPointer != 0)
+            {
+                var that = provider.Provide(Convert.ToInt32(parsed.Header1.CHPEMetadataPointer - header.ImageBase), 4).ToArray();
+                Console.WriteLine(BitConverter.ToString(that).Replace("-", " "));
+            }
         }
 
         [Test]
