@@ -8,6 +8,6 @@ namespace LibAmong3.Helpers.Guessr
 {
     public class Guess1Options
     {
-        public bool NoArm64XDetection { get; set; }
+        public bool DisableArm64XDetection { get; set; }
     }
 }

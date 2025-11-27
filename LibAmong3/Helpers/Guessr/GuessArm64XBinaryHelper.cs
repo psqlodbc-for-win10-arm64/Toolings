@@ -11,7 +11,7 @@ namespace LibAmong3.Helpers.Guessr
     {
         public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe, Guess1Options opts)
         {
-            var detectArm64X = !opts.NoArm64XDetection;
+            var detectArm64X = !opts.DisableArm64XDetection;
 
             if (true
                 && 2 <= exe.Length

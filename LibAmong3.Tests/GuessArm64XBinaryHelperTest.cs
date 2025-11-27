@@ -49,7 +49,7 @@ namespace LibAmong3.Tests
         {
             var bytes = File.ReadAllBytes($@"Files\{dllName}");
             var guessr = new GuessArm64XBinaryHelper();
-            Assert.That(guessr.Guess(bytes, new Guess1Options { NoArm64XDetection = true, }), Is.EqualTo(nativeForm));
+            Assert.That(guessr.Guess(bytes, new Guess1Options { DisableArm64XDetection = true, }), Is.EqualTo(nativeForm));
         }
 
         [Test]
