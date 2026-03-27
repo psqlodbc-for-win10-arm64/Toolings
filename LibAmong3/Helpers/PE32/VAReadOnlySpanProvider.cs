@@ -21,7 +21,15 @@ namespace LibAmong3.Helpers.PE32
 
             if (section == null)
             {
-                throw new ArgumentException($"Invalid virtual address {rva:X8}");
+                if (rva < 4096 && rva + size < Exe.Length)
+                {
+                    // this is unsure I can assume first 4,096 bytes can be mapped to binary since MS-DOS header.
+                    return Exe.Span.Slice(rva, size);
+                }
+                else
+                {
+                    throw new ArgumentException($"Invalid virtual address {rva:X8}");
+                }
             }
 
             var offset = rva - section.VirtualAddress;

@@ -1,4 +1,5 @@
 ﻿using LibAmong3.Helpers.PE32;
+using LibAmong3.Helpers.PE32.Deeper;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -142,7 +143,7 @@ namespace LibAmong3.Helpers.Guessr
                         {
                             if (seeCHPE)
                             {
-                                var lookAtLoadConfig = new LookAtLoadConfig(exe);
+                                var lookAtLoadConfig = new LookAtLoadConfig1(exe);
                                 if (lookAtLoadConfig.GetCHPEVersion() == 2)
                                 {
                                     return Arm64XBinaryForm.Arm64EC;
@@ -176,7 +177,7 @@ namespace LibAmong3.Helpers.Guessr
                         {
                             if (seeCHPE)
                             {
-                                var lookAtLoadConfig = new LookAtLoadConfig(exe);
+                                var lookAtLoadConfig = new LookAtLoadConfig1(exe);
                                 if (lookAtLoadConfig.GetCHPEVersion() == 2)
                                 {
                                     if (seeDvrt)
@@ -202,7 +203,7 @@ namespace LibAmong3.Helpers.Guessr
                             }
                             else if (seeDvrt)
                             {
-                                var lookAtLoadConfig = new LookAtLoadConfig(exe);
+                                var lookAtLoadConfig = new LookAtLoadConfig1(exe);
                                 if (lookAtLoadConfig.HasDvrtToMakeX64())
                                 {
                                     return Arm64XBinaryForm.Arm64X;
@@ -252,93 +253,6 @@ namespace LibAmong3.Helpers.Guessr
             bool a64xrm,
             bool hexpthk
         );
-
-        private class LookAtLoadConfig
-        {
-            public Func<int> GetCHPEVersion { get; } = () => 0;
-            public Func<bool> HasDvrtToMakeX64 { get; } = () => false;
-
-            public LookAtLoadConfig(ReadOnlyMemory<byte> exe)
-            {
-                var parseHeader = new ParseHeader();
-                var header = parseHeader.Parse(exe);
-                var loadConfigDirEntry = header.GetImageDirectoryOrEmpty(10);
-                if (loadConfigDirEntry.Size != 0)
-                {
-                    var parseLoadConfigDir = new ParseLoadConfigDir();
-                    var provider = new VAReadOnlySpanProvider(
-                        exe,
-                        header.Sections
-                    );
-                    var loadConfigDir = parseLoadConfigDir.Parse(
-                        provide: provider.Provide,
-                        virtualAddress: loadConfigDirEntry.VirtualAddress,
-                        isPE32Plus: header.IsPE32Plus
-                    );
-                    GetCHPEVersion = () =>
-                    {
-                        var chpeMetadataPointer = loadConfigDir.Header1.CHPEMetadataPointer;
-                        if (chpeMetadataPointer != 0)
-                        {
-                            var versionSpan = provider.Provide(Convert.ToInt32(chpeMetadataPointer - header.ImageBase), 4);
-                            return BinaryPrimitives.ReadInt32LittleEndian(versionSpan);
-                        }
-                        else
-                        {
-                            return 0;
-                        }
-                    };
-                    HasDvrtToMakeX64 = () =>
-                    {
-                        if (loadConfigDir.Header1.DynamicValueRelocTableSection != 0)
-                        {
-                            var rva = header.Sections[loadConfigDir.Header1.DynamicValueRelocTableSection - 1].VirtualAddress + (int)loadConfigDir.Header1.DynamicValueRelocTableOffset;
-
-                            var dvrtHeader = new ParseDvrtHeader().Parse(
-                                provider.Provide,
-                                rva
-                            );
-
-                            var parseRelocationArm64X = new ParseRelocationArm64X();
-
-                            foreach (var relocationSet in dvrtHeader.RelocationSets
-                                .Where(it => it.Symbol == 6) // IMAGE_DYNAMIC_RELOCATION_ARM64X
-                            )
-                            {
-                                foreach (var relocation in relocationSet.Relocations)
-                                {
-                                    var reloc = parseRelocationArm64X.Parse(
-                                        provider.Provide(
-                                            relocation.Rva,
-                                            relocation.BaseRelocSize
-                                        )
-                                    );
-                                    foreach (var entry in reloc.Entries)
-                                    {
-                                        if (true
-                                            && (entry.Meta & 3) == 1
-                                            && entry.Offset == header.MachineOffset
-                                            && entry.Content.Length == 2
-                                            && entry.Content[0] == 0x64
-                                            && entry.Content[1] == 0x86
-                                        )
-                                        {
-                                            return true;
-                                        }
-                                    }
-                                }
-                            }
-
-                            return false;
-                        }
-                        else
-                        {
-                            return false;
-                        }
-                    };
-                }
-            }
-        }
 
         public Arm64XBinaryForm Guess(ReadOnlyMemory<byte> exe)
         {

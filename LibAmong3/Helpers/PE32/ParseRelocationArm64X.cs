@@ -14,33 +14,63 @@ namespace LibAmong3.Helpers.PE32
             ReadOnlySpan<byte> binary
         )
         {
-            var entries = new List<RelocationArm64X.Entry>();
+            var entryGroups = new List<RelocationArm64X.EntryGroup>();
 
             while (binary.Length != 0)
             {
-                var word = BinaryPrimitives.ReadUInt16LittleEndian(binary);
-                binary = binary.Slice(2);
+                var entries = new List<RelocationArm64X.Entry>();
 
-                var meta = (word >> 12) & 15;
-                var size = 0;
-                if ((meta & 3) == 1)
+                var rva = BinaryPrimitives.ReadInt32LittleEndian(binary);
+                binary = binary.Slice(4);
+                var sizeOfBlock = BinaryPrimitives.ReadInt32LittleEndian(binary);
+                binary = binary.Slice(4);
+
+                var block = binary.Slice(0, sizeOfBlock - 8);
+                binary = binary.Slice(sizeOfBlock - 8);
+
+                while (block.Length != 0)
                 {
-                    size = 1 << (meta >> 2);
+                    var word = BinaryPrimitives.ReadUInt16LittleEndian(block);
+                    block = block.Slice(2);
+
+                    if (word == 0)
+                    {
+                        // padding?
+                        break;
+                    }
+
+                    var meta = (word >> 12) & 15;
+                    var contentSize = 0;
+                    if ((meta & 3) == 1)
+                    {
+                        contentSize = 1 << (meta >> 2);
+                    }
+                    else if ((meta & 3) == 2)
+                    {
+                        contentSize = 2;
+                    }
+
+                    entries.Add(
+                        new RelocationArm64X.Entry(
+                            Offset: word & 0x0FFF,
+                            Meta: meta,
+                            Content: block.Slice(0, contentSize).ToArray()
+                        )
+                    );
+
+                    block = block.Slice(contentSize);
                 }
 
-                entries.Add(
-                    new RelocationArm64X.Entry(
-                        Offset: word & 0x0FFF,
-                        Meta: meta,
-                        Content: binary.Slice(0, size).ToArray()
+                entryGroups.Add(
+                    new RelocationArm64X.EntryGroup(
+                        Rva: rva,
+                        Entries: entries.AsReadOnly()
                     )
                 );
-
-                binary = binary.Slice(size);
             }
 
             return new RelocationArm64X(
-                Entries: entries.AsReadOnly()
+                Groups: entryGroups.AsReadOnly()
             );
         }
     }
