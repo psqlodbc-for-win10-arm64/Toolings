@@ -8,6 +8,7 @@ namespace LibAmong3.Helpers.PE32
 {
     public record PESection(
         string Name,
+        int VirtualSize,
         int VirtualAddress,
         int SizeOfRawData,
         int PointerToRawData)

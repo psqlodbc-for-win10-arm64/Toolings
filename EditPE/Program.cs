@@ -478,17 +478,18 @@ namespace EditPE
         private static void PrintPESections(IEnumerable<PESection> sections)
         {
             {
-                Console.WriteLine("Name     | VirtualAddress      | AtFile   | Size     ");
-                Console.WriteLine("---------|---------------------|----------|----------");
+                Console.WriteLine("Name     | VirtualAddress      | AtFile   | Size     | VirtSize ");
+                Console.WriteLine("---------|---------------------|----------|----------|----------");
             }
             foreach (var sect in sections)
             {
-                Console.WriteLine("{0,-8} | {1:X8} - {2:X8} | {3:X8} | {4:X8} "
+                Console.WriteLine("{0,-8} | {1:X8} - {2:X8} | {3:X8} | {4:X8} | {5:X8} "
                     , sect.Name
                     , sect.VirtualAddress
                     , sect.VirtualAddress + sect.SizeOfRawData - 1
                     , sect.PointerToRawData
                     , sect.SizeOfRawData
+                    , sect.VirtualSize
                     );
             }
         }
