@@ -143,8 +143,8 @@ namespace LibAmong3.Helpers.Guessr
                         {
                             if (seeCHPE)
                             {
-                                var lookAtLoadConfig = new LookAtLoadConfig1(exe);
-                                if (lookAtLoadConfig.GetCHPEVersion() == 2)
+                                var lookAtLoadConfig = LookAtLoadConfig1.Create(exe);
+                                if (lookAtLoadConfig?.GetCHPEVersion() == 2)
                                 {
                                     return Arm64XBinaryForm.Arm64EC;
                                 }
@@ -177,8 +177,8 @@ namespace LibAmong3.Helpers.Guessr
                         {
                             if (seeCHPE)
                             {
-                                var lookAtLoadConfig = new LookAtLoadConfig1(exe);
-                                if (lookAtLoadConfig.GetCHPEVersion() == 2)
+                                var lookAtLoadConfig = LookAtLoadConfig1.Create(exe);
+                                if (lookAtLoadConfig?.GetCHPEVersion() == 2)
                                 {
                                     if (seeDvrt)
                                     {
@@ -203,8 +203,8 @@ namespace LibAmong3.Helpers.Guessr
                             }
                             else if (seeDvrt)
                             {
-                                var lookAtLoadConfig = new LookAtLoadConfig1(exe);
-                                if (lookAtLoadConfig.HasDvrtToMakeX64())
+                                var lookAtLoadConfig = LookAtLoadConfig1.Create(exe);
+                                if (lookAtLoadConfig?.HasDvrtToMakeX64() ?? false)
                                 {
                                     return Arm64XBinaryForm.Arm64X;
                                 }

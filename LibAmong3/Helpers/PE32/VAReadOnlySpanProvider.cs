@@ -13,6 +13,27 @@ namespace LibAmong3.Helpers.PE32
         /// <param name="size">Number of bytes. If positive numbers, it must return the minimum bytes requested. If negative numbers are provided, it returns the requested bytes, which may be lower than specified.</param>
         public ReadOnlySpan<byte> Provide(int rva, int size)
         {
+            if (0 <= rva && rva < 4096)
+            {
+                // this is unsure I can assume first 4,096 bytes can be mapped to binary since MS-DOS header.
+                if (size < 0)
+                {
+                    return Exe.Span.Slice(rva, Math.Min(-size, 4096 - rva));
+                }
+                else
+                {
+                    var remain = 4096 - rva;
+                    if (remain < size)
+                    {
+                        throw new EndOfStreamException();
+                    }
+                    else
+                    {
+                        return Exe.Span.Slice(rva, size);
+                    }
+                }
+            }
+
             var section = Sections
                 .SingleOrDefault(it => true
                     && it.VirtualAddress <= rva
@@ -21,15 +42,7 @@ namespace LibAmong3.Helpers.PE32
 
             if (section == null)
             {
-                if (rva < 4096 && rva + size < Exe.Length)
-                {
-                    // this is unsure I can assume first 4,096 bytes can be mapped to binary since MS-DOS header.
-                    return Exe.Span.Slice(rva, size);
-                }
-                else
-                {
-                    throw new ArgumentException($"Invalid virtual address {rva:X8}");
-                }
+                throw new ArgumentException($"Invalid virtual address {rva:X8}");
             }
 
             var offset = rva - section.VirtualAddress;

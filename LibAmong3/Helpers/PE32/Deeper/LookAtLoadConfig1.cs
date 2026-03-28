@@ -1,20 +1,21 @@
 ﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace LibAmong3.Helpers.PE32.Deeper
 {
-    public class LookAtLoadConfig1
+    public record LookAtLoadConfig1(
+        Func<int> GetCHPEVersion,
+        Func<bool> HasDvrtToMakeX64,
+        Action<PatchableVASpanProvider> ApplyDvrt)
     {
-        public Func<int> GetCHPEVersion { get; } = () => 0;
-        public Func<bool> HasDvrtToMakeX64 { get; } = () => false;
-        public Func<ProvideReadOnlySpanDelegate> ApplyDvrt { get; } = () => throw new NotSupportedException();
-
-        public LookAtLoadConfig1(ReadOnlyMemory<byte> exe)
+        public static LookAtLoadConfig1? Create(ReadOnlyMemory<byte> exe)
         {
             var parseHeader = new ParseHeader();
             var header = parseHeader.Parse(exe);
@@ -31,7 +32,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     virtualAddress: loadConfigDirEntry.VirtualAddress,
                     isPE32Plus: header.IsPE32Plus
                 );
-                GetCHPEVersion = () =>
+
+                int GetCHPEVersion()
                 {
                     var chpeMetadataPointer = loadConfigDir.Header1.CHPEMetadataPointer;
                     if (chpeMetadataPointer != 0)
@@ -43,145 +45,195 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     {
                         return 0;
                     }
-                };
-                ApplyDvrt = () =>
+                }
+
+                void ApplyDvrt(PatchableVASpanProvider subProvider)
                 {
                     var replaces = new List<Replace>();
 
                     if (loadConfigDir.Header1.DynamicValueRelocTableSection != 0)
                     {
-                        var rva = header.Sections[loadConfigDir.Header1.DynamicValueRelocTableSection - 1].VirtualAddress + (int)loadConfigDir.Header1.DynamicValueRelocTableOffset;
-
-                        var dvrtHeader = new ParseDvrtHeader().Parse(
-                            provider.Provide,
-                            rva
+                        Parse_IMAGE_DYNAMIC_RELOCATION_TABLEs(
+                            rva: header.Sections[loadConfigDir.Header1.DynamicValueRelocTableSection - 1].VirtualAddress + (int)loadConfigDir.Header1.DynamicValueRelocTableOffset
                         );
 
-                        var parseRelocationArm64X = new ParseRelocationArm64X();
-
-                        foreach (var relocationSet in dvrtHeader.RelocationSets
-                            .Where(it => it.Symbol == 6) // IMAGE_DYNAMIC_RELOCATION_ARM64X
-                        )
+                        void Parse_IMAGE_DYNAMIC_RELOCATION_TABLEs(int rva)
                         {
-                            foreach (var relocation in relocationSet.Relocations)
+                            while (true)
                             {
-                                var reloc = parseRelocationArm64X.Parse(
-                                    provider.Provide(
-                                        relocation.Rva,
-                                        relocation.BaseRelocSize
-                                    )
-                                );
-                                foreach (var group in reloc.Groups)
+                                // https://ffri.github.io/ProjectChameleon/new_reloc_chpev2/#new-dynamic-value-relocation-table-dvrt-image_dynamic_relocation_arm64x
+
+                                // typedef struct {
+                                //   DWORD Version; // = 1
+                                //   DWORD Size;
+                                // } IMAGE_DYNAMIC_RELOCATION_TABLE;
+
+                                var IMAGE_DYNAMIC_RELOCATION_TABLE = subProvider.Provide(rva, 8);
+                                rva += 8;
+
+                                var version = BinaryPrimitives.ReadInt32LittleEndian(IMAGE_DYNAMIC_RELOCATION_TABLE);
+                                if (version != 1)
                                 {
-                                    foreach (var entry in group.Entries)
-                                    {
-                                        var type = (entry.Meta & 3);
-                                        if (type == 0)
-                                        {
-                                            // zero fill
-                                            var size = 1 << ((entry.Meta >> 2) & 3);
-                                            replaces.Add(
-                                                new Replace(
-                                                    group.Rva + entry.Offset,
-                                                    size,
-                                                    new byte[size]
-                                                )
-                                            );
-                                        }
-                                        else if (type == 1)
-                                        {
-                                            // assign
-                                            replaces.Add(
-                                                new Replace(
-                                                    group.Rva + entry.Offset,
-                                                    entry.Content.Length,
-                                                    entry.Content
-                                                )
-                                            );
-                                        }
-                                        else if (type == 2)
-                                        {
-                                            // binary op
-                                            var value = BinaryPrimitives.ReadUInt32LittleEndian(provider.Provide(relocation.Rva + entry.Offset, 4));
-                                            var data = BinaryPrimitives.ReadInt16LittleEndian(entry.Content);
-                                            var scale = ((entry.Meta & 4) != 0) ? 8 : 4;
-                                            var sign = ((entry.Meta & 8) != 0) ? -1 : 1;
+                                    break;
+                                }
 
-                                            var bytes = new byte[4];
+                                var size = BinaryPrimitives.ReadInt32LittleEndian(IMAGE_DYNAMIC_RELOCATION_TABLE.Slice(4));
+                                if (size < 8)
+                                {
+                                    break;
+                                }
+
+                                Parse_IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER(rva);
+
+                                rva += size;
+                                continue;
+
+                            }
+                        }
+
+                        void Parse_IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER(int rva)
+                        {
+                            // typedef struct {
+                            //   ULONGLONG Symbol; // = 6
+                            //   DWORD FixupInfoSize;
+                            // } IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER;
+
+                            var IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER = subProvider.Provide(rva, 12);
+                            rva += 12;
+
+                            var symbol = BinaryPrimitives.ReadInt64LittleEndian(IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER);
+                            if (symbol == 6)
+                            {
+                                var baseRelocSize = BinaryPrimitives.ReadInt32LittleEndian(IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER.Slice(8));
+
+                                Parse_IMAGE_DYNAMIC_RELOCATION_ARM64X_BLOCK(rva, rva + baseRelocSize);
+                            }
+                        }
+
+                        void Parse_IMAGE_DYNAMIC_RELOCATION_ARM64X_BLOCK(int rva, int rvaEnd)
+                        {
+                            while (rva < rvaEnd)
+                            {
+                                // typedef struct {
+                                //   DWORD VirtualAddress; // 4,096 bytes page aligned
+                                //   DWORD SizeOfBlock;
+                                // } IMAGE_DYNAMIC_RELOCATION_ARM64X_BLOCK;
+
+                                var IMAGE_DYNAMIC_RELOCATION_ARM64X_BLOCK = subProvider.Provide(rva, 8);
+                                rva += 8;
+
+                                var targetRva = BinaryPrimitives.ReadInt32LittleEndian(IMAGE_DYNAMIC_RELOCATION_ARM64X_BLOCK);
+                                var sizeOfBlock = BinaryPrimitives.ReadInt32LittleEndian(IMAGE_DYNAMIC_RELOCATION_ARM64X_BLOCK.Slice(4));
+
+                                var blockRva = rva;
+                                rva += sizeOfBlock - 8;
+                                var blockRvaEnd = rva;
+
+                                ParseEntries(blockRva, blockRvaEnd, targetRva);
+                            }
+                        }
+
+                        void ParseEntries(int rva, int rvaEnd, int targetRva)
+                        {
+                            while (rva < rvaEnd)
+                            {
+                                var word = BinaryPrimitives.ReadUInt16LittleEndian(subProvider.Provide(rva, 2));
+                                rva += 2;
+
+                                if (word == 0)
+                                {
+                                    // term padding?
+                                    break;
+                                }
+
+                                var meta = (word >> 12) & 15;
+                                switch (meta & 3)
+                                {
+                                    case 0: // zero fill
+                                        {
+                                            //TODO: untested
+                                            var offset = word & 0x0FFF;
+                                            var size = 1 << ((meta >> 2) & 3);
+
+                                            subProvider.Patch(
+                                                rva: targetRva + offset,
+                                                content: new byte[size]
+                                            );
+                                        }
+                                        break;
+                                    case 1: // assign
+                                        {
+                                            var offset = word & 0x0FFF;
+                                            var size = 1 << ((meta >> 2) & 3);
+
+                                            subProvider.Patch(
+                                                rva: targetRva + offset,
+                                                content: subProvider.Provide(rva, size)
+                                            );
+
+                                            rva += size;
+                                        }
+                                        break;
+                                    case 2: // add or sub
+                                        {
+                                            //TODO: untested
+                                            var offset = word & 0x0FFF;
+                                            var sign = ((meta & 4) != 0) ? -1 : 1;
+                                            var scale = ((meta & 4) != 0) ? 8 : 4;
+
+                                            var rwAt = targetRva + offset;
+
+                                            var content = subProvider.Provide(rwAt, 4).ToArray();
+
+                                            var data = BinaryPrimitives.ReadUInt16LittleEndian(subProvider.Provide(rva, 2));
+
                                             BinaryPrimitives.WriteUInt32LittleEndian(
-                                                bytes,
-                                                value + (uint)(sign * scale * data)
-                                            );
-
-                                            replaces.Add(
-                                                new Replace(
-                                                    group.Rva + entry.Offset,
-                                                    4,
-                                                    bytes
+                                                content,
+                                                (uint)(
+                                                    BinaryPrimitives.ReadUInt32LittleEndian(content)
+                                                    + sign * scale * data
                                                 )
                                             );
+
+                                            subProvider.Patch(
+                                                rva: rwAt,
+                                                content: content
+                                            );
+
+                                            rva += 2;
                                         }
-                                    }
+                                        break;
+                                    case 3:
+                                        //TODO: untested
+                                        throw new NotImplementedException();
                                 }
                             }
                         }
                     }
+                }
 
-                    return (rva, size) =>
-                    {
-                        var any = false;
-                        foreach (var one in replaces)
-                        {
-                            any |= one.Rva <= rva && rva < one.Rva + one.Size;
-                            any |= rva < one.Rva && one.Rva < rva + size;
-                        }
-                        if (any)
-                        {
-                            var bytes = provider.Provide(rva, size).ToArray();
-
-                            foreach (var one in replaces)
-                            {
-                                if (one.Rva <= rva && rva < one.Rva + one.Size)
-                                {
-                                    one.ReplaceWith.Slice(
-                                        rva - one.Rva,
-                                        Math.Min(one.Rva + one.Size - rva, size)
-                                    )
-                                        .CopyTo(
-                                            bytes
-                                        );
-                                }
-                                else if (rva < one.Rva && one.Rva < rva + size)
-                                {
-                                    one.ReplaceWith.Slice(
-                                        0,
-                                        Math.Min(rva + size - one.Rva, one.Size)
-                                    )
-                                        .CopyTo(
-                                            bytes.AsMemory(one.Rva - rva)
-                                        );
-                                }
-                            }
-
-                            return bytes;
-                        }
-                        else
-                        {
-                            return provider.Provide(rva, size);
-                        }
-                    };
-                };
-                HasDvrtToMakeX64 = () =>
+                bool HasDvrtToMakeX64()
                 {
-                    var subProvider = ApplyDvrt();
+                    var subProvider = new PatchableVASpanProvider(provider.Provide);
+                    ApplyDvrt(subProvider);
+
                     var machine = BinaryPrimitives.ReadUInt16LittleEndian(
-                        subProvider(
+                        subProvider.Provide(
                             header.MachineOffset,
                             2
                         )
                     );
                     return machine == 0x8664;
-                };
+                }
+
+                return new LookAtLoadConfig1(
+                    GetCHPEVersion,
+                    HasDvrtToMakeX64,
+                    ApplyDvrt);
+            }
+            else
+            {
+                return null;
             }
         }
 
