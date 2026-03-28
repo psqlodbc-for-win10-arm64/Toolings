@@ -13,12 +13,19 @@ namespace LibAmong3.Helpers.PE32
         /// <param name="size">Number of bytes. If positive numbers, it must return the minimum bytes requested. If negative numbers are provided, it returns the requested bytes, which may be lower than specified.</param>
         public ReadOnlySpan<byte> Provide(int rva, int size)
         {
+            var pair = Locate(rva, size);
+            return Exe.Span.Slice(pair.Start, pair.Length);
+        }
+
+        /// <param name="size">Number of bytes. If positive numbers, it must return the minimum bytes requested. If negative numbers are provided, it returns the requested bytes, which may be lower than specified.</param>
+        public (int Start, int Length) Locate(int rva, int size)
+        {
             if (0 <= rva && rva < 4096)
             {
                 // this is unsure I can assume first 4,096 bytes can be mapped to binary since MS-DOS header.
                 if (size < 0)
                 {
-                    return Exe.Span.Slice(rva, Math.Min(-size, 4096 - rva));
+                    return (rva, Math.Min(-size, 4096 - rva));
                 }
                 else
                 {
@@ -29,7 +36,7 @@ namespace LibAmong3.Helpers.PE32
                     }
                     else
                     {
-                        return Exe.Span.Slice(rva, size);
+                        return (rva, size);
                     }
                 }
             }
@@ -51,11 +58,11 @@ namespace LibAmong3.Helpers.PE32
             {
                 var availableSize = section.SizeOfRawData - offset;
                 var returnSize = Math.Min(availableSize, -size);
-                return Exe.Span.Slice(section.PointerToRawData + offset, returnSize);
+                return (section.PointerToRawData + offset, returnSize);
             }
             else
             {
-                return Exe.Span.Slice(section.PointerToRawData + offset, size);
+                return (section.PointerToRawData + offset, size);
             }
         }
     }
