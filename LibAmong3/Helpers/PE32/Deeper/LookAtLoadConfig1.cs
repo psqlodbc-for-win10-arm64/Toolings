@@ -93,6 +93,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
 
                         void Parse_IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER(int rva)
                         {
+                            // https://ffri.github.io/ProjectChameleon/new_reloc_chpev2/#new-dynamic-value-relocation-table-dvrt-image_dynamic_relocation_arm64x
+
                             // typedef struct {
                             //   ULONGLONG Symbol; // = 6
                             //   DWORD FixupInfoSize;
@@ -114,6 +116,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
                         {
                             while (rva < rvaEnd)
                             {
+                                // https://ffri.github.io/ProjectChameleon/new_reloc_chpev2/#new-dynamic-value-relocation-table-dvrt-image_dynamic_relocation_arm64x
+
                                 // typedef struct {
                                 //   DWORD VirtualAddress; // 4,096 bytes page aligned
                                 //   DWORD SizeOfBlock;
