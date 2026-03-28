@@ -79,7 +79,9 @@ namespace LibAmong3.Helpers.PE32
                     IsPE32Plus: isPE32Plus,
                     ImageDataDirectories: imageDataDirectories,
                     ImageBase: imageBase,
-                    MachineOffset: machineOffset
+                    MachineOffset: machineOffset,
+                    PEOffset: peOffset,
+                    OptHeaderSize: optHeaderSize
                 );
             }
             else

@@ -13,7 +13,7 @@ namespace LibAmong3.Helpers.PE32.Deeper
     public record LookAtLoadConfig1(
         Func<int> GetCHPEVersion,
         Func<bool> HasDvrtToMakeX64,
-        Action<PatchableVASpanProvider> ApplyDvrt)
+        Func<PatchableVASpanProvider, LookAtLoadConfig1.ApplyDvrtResult> ApplyDvrt)
     {
         public static LookAtLoadConfig1? Create(ReadOnlyMemory<byte> exe)
         {
@@ -47,17 +47,18 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     }
                 }
 
-                void ApplyDvrt(PatchableVASpanProvider subProvider)
+                ApplyDvrtResult ApplyDvrt(PatchableVASpanProvider subProvider)
                 {
-                    var replaces = new List<Replace>();
-
                     if (loadConfigDir.Header1.DynamicValueRelocTableSection != 0)
                     {
-                        Parse_IMAGE_DYNAMIC_RELOCATION_TABLEs(
-                            rva: header.Sections[loadConfigDir.Header1.DynamicValueRelocTableSection - 1].VirtualAddress + (int)loadConfigDir.Header1.DynamicValueRelocTableOffset
+                        var rvaStart = header.Sections[loadConfigDir.Header1.DynamicValueRelocTableSection - 1].VirtualAddress + (int)loadConfigDir.Header1.DynamicValueRelocTableOffset;
+                        var rvaEnd = Parse_IMAGE_DYNAMIC_RELOCATION_TABLEs(
+                            rva: rvaStart
                         );
 
-                        void Parse_IMAGE_DYNAMIC_RELOCATION_TABLEs(int rva)
+                        return new ApplyDvrtResult(RvaStart: rvaStart, RvaEnd: rvaEnd);
+
+                        int Parse_IMAGE_DYNAMIC_RELOCATION_TABLEs(int rva)
                         {
                             while (true)
                             {
@@ -89,6 +90,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
                                 continue;
 
                             }
+
+                            return rva;
                         }
 
                         void Parse_IMAGE_DYNAMIC_RELOCATION_ARM64X_HEADER(int rva)
@@ -214,6 +217,10 @@ namespace LibAmong3.Helpers.PE32.Deeper
                             }
                         }
                     }
+                    else
+                    {
+                        return new ApplyDvrtResult(RvaStart: 0, RvaEnd: 0);
+                    }
                 }
 
                 bool HasDvrtToMakeX64()
@@ -231,9 +238,9 @@ namespace LibAmong3.Helpers.PE32.Deeper
                 }
 
                 return new LookAtLoadConfig1(
-                    GetCHPEVersion,
-                    HasDvrtToMakeX64,
-                    ApplyDvrt);
+                    GetCHPEVersion: GetCHPEVersion,
+                    HasDvrtToMakeX64: HasDvrtToMakeX64,
+                    ApplyDvrt: ApplyDvrt);
             }
             else
             {
@@ -241,6 +248,6 @@ namespace LibAmong3.Helpers.PE32.Deeper
             }
         }
 
-        private record Replace(int Rva, int Size, ReadOnlyMemory<byte> ReplaceWith);
+        public record ApplyDvrtResult(int RvaStart, int RvaEnd);
     }
 }

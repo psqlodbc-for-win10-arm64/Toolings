@@ -38,75 +38,211 @@ namespace EditPE
             public string PEFileSaveTo { get; set; } = null!;
         }
 
+        [Verb("export-dvrt", HelpText = "Export the Dynamic value relocation table to a new file")]
+        private class ExportDvrtOpt
+        {
+            [Value(0, Required = true, MetaName = "PEFileLoadFrom")]
+            public string PEFileLoadFrom { get; set; } = null!;
+
+            [Value(1, Required = true, MetaName = "DvrtSaveTo")]
+            public string DvrtSaveTo { get; set; } = null!;
+        }
+
+        [Verb("import-dvrt", HelpText = "Import the Dynamic value relocation table from a file")]
+        private class ImportDvrtOpt
+        {
+            [Value(0, Required = true, MetaName = "PEFileLoadFrom")]
+            public string PEFileLoadFrom { get; set; } = null!;
+
+            [Value(1, Required = true, MetaName = "DvrtLoadFrom")]
+            public string DvrtLoadFrom { get; set; } = null!;
+
+            [Value(2, Required = true, MetaName = "PEFileSaveTo")]
+            public string PEFileSaveTo { get; set; } = null!;
+        }
+
+        [Verb("print-sections", HelpText = "Print sections from a PE file")]
+        private class PrintSectionsOpt
+        {
+            [Value(0, Required = true, MetaName = "PEFileLoadFrom")]
+            public string PEFileLoadFrom { get; set; } = null!;
+        }
+
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<PrintDvrtPatchOpt, ApplyDvrtOpt, NullifyDvrtOpt>(args)
-                .MapResult<PrintDvrtPatchOpt, ApplyDvrtOpt, NullifyDvrtOpt, int>(
+            return Parser.Default.ParseArguments<PrintDvrtPatchOpt, ApplyDvrtOpt, NullifyDvrtOpt, ExportDvrtOpt, ImportDvrtOpt, PrintSectionsOpt>(args)
+                .MapResult<PrintDvrtPatchOpt, ApplyDvrtOpt, NullifyDvrtOpt, ExportDvrtOpt, ImportDvrtOpt, PrintSectionsOpt, int>(
                     DoPrintDvrtPatch,
                     DoApplyDvrt,
                     DoNullifyDvrt,
+                    DoExportDvrt,
+                    DoImportDvrt,
+                    DoPrintSections,
                     errs => 1
                 );
+        }
+
+        private static void PrintPESections(IEnumerable<PESection> sections)
+        {
+            {
+                Console.WriteLine("Name     | VirtualAddress      | AtFile   | Size     ");
+                Console.WriteLine("---------|---------------------|----------|----------");
+            }
+            foreach (var sect in sections)
+            {
+                Console.WriteLine("{0,-8} | {1:X8} - {2:X8} | {3:X8} | {4:X8} "
+                    , sect.Name
+                    , sect.VirtualAddress
+                    , sect.VirtualAddress + sect.SizeOfRawData - 1
+                    , sect.PointerToRawData
+                    , sect.SizeOfRawData
+                    );
+            }
+        }
+
+        private static int DoPrintSections(PrintSectionsOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEFileLoadFrom);
+
+            var parseHeader = new ParseHeader();
+            var header = parseHeader.Parse(pe);
+
+            PrintPESections(header.Sections);
+
+            return 0;
+        }
+
+        private static int DoImportDvrt(ImportDvrtOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEFileLoadFrom).AsMemory();
+
+            var dvrt = File.ReadAllBytes(opt.DvrtLoadFrom);
+
+            var lookAtLoadConfig = LookAtLoadConfig1.Create(pe);
+            if (lookAtLoadConfig != null)
+            {
+                var parseHeader = new ParseHeader();
+                var header = parseHeader.Parse(pe);
+
+                PrintPESections(header.Sections);
+
+                Console.WriteLine();
+
+                var provider = new VAReadOnlySpanProvider(
+                    pe,
+                    header.Sections
+                );
+                var patchableVASpanProvider = new PatchableVASpanProvider(provider.Provide);
+
+                var result = lookAtLoadConfig.ApplyDvrt(patchableVASpanProvider);
+
+                Console.WriteLine("Info: Current DVRT is ranging rva from {0:X8} to {1:X8} ({2} bytes)", result.RvaStart, result.RvaEnd - 1, dvrt.Length);
+
+                var sectIdx = Array.FindIndex(header.Sections.ToArray(), it => it.VirtualAddress <= result.RvaStart && result.RvaStart < it.VirtualAddress + it.SizeOfRawData);
+                if (sectIdx < 0)
+                {
+                    Console.Error.WriteLine("Error: DVRT is not located in any of listed sections!");
+                    throw new Exception();
+                }
+                var sectAt = header.Sections[sectIdx];
+                Console.WriteLine("Info: Current DVRT is located at section \"{0}\"", sectAt.Name);
+
+                {
+                    var bytesToAdd = dvrt.Length;
+
+                    var editSectionHelper = new EditSectionHelper();
+
+                    if (editSectionHelper.TryToGlowSection(pe, sectIdx, bytesToAdd) is var pair && pair != null)
+                    {
+                        // acquired
+
+                        Console.WriteLine("Info: Glow the existing section \"{0}\", and then write to the appended space.", sectAt.Name);
+                    }
+                    else
+                    {
+                        pair = editSectionHelper.AddNewSection(pe, ".sect1", bytesToAdd);
+
+                        Console.WriteLine("Info: Add new section \"{0}\", and then write to there.", ".sect1");
+                    }
+
+                    pe = pair.Value.PeMod;
+                    dvrt.CopyTo(pe.Slice(pair.Value.PointerToWrite));
+                }
+
+                Console.WriteLine();
+
+                {
+                    var headerAfter = parseHeader.Parse(pe);
+
+                    PrintPESections(headerAfter.Sections);
+                }
+
+                using (var stream = File.Create(opt.PEFileSaveTo))
+                {
+                    stream.Write(pe.Span);
+                }
+                return 0;
+            }
+            else
+            {
+                Console.Error.WriteLine("Error: loadConfigDirEntry not found!");
+                return 1;
+            }
+        }
+
+        private static int DoExportDvrt(ExportDvrtOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEFileLoadFrom);
+
+            var lookAtLoadConfig = LookAtLoadConfig1.Create(pe);
+            if (lookAtLoadConfig != null)
+            {
+                var parseHeader = new ParseHeader();
+                var header = parseHeader.Parse(pe);
+                var provider = new VAReadOnlySpanProvider(
+                    pe,
+                    header.Sections
+                );
+                var patchableVASpanProvider = new PatchableVASpanProvider(provider.Provide);
+
+                var result = lookAtLoadConfig.ApplyDvrt(patchableVASpanProvider);
+
+                var dvrt = provider.Provide(result.RvaStart, result.RvaEnd - result.RvaStart);
+
+                Console.Error.WriteLine("Info: DVRT rva from {0:X8} to {1:X8} ({2} bytes)", result.RvaStart, result.RvaEnd - 1, dvrt.Length);
+
+                using (var stream = File.Create(opt.DvrtSaveTo))
+                {
+                    stream.Write(dvrt);
+                }
+                return 0;
+            }
+            else
+            {
+                Console.Error.WriteLine("Error: loadConfigDirEntry not found!");
+                return 1;
+            }
         }
 
         private static int DoNullifyDvrt(NullifyDvrtOpt opt)
         {
             var exe = File.ReadAllBytes(opt.PEFileLoadFrom);
 
-            var parseHeader = new ParseHeader();
-            var header = parseHeader.Parse(exe);
-            var loadConfigDirEntry = header.GetImageDirectoryOrEmpty(10);
-            if (loadConfigDirEntry.Size != 0)
+            var ok = new ModifyDvrtPointerHelper().ModifyDvrtPointer(
+                exe: exe,
+                offset: 0,
+                section: 0,
+                logWarn: s => Console.Error.WriteLine("Warn: {0}", s),
+                logError: s => Console.Error.WriteLine("Error: {0}", s)
+            );
+
+            if (ok)
             {
-                var parseLoadConfigDir = new ParseLoadConfigDir();
-                var provider = new VAReadOnlySpanProvider(
-                    exe,
-                    header.Sections
-                );
-
-                var isPE32Plus = header.IsPE32Plus;
-                var virtualAddress = loadConfigDirEntry.VirtualAddress;
-
-                var size = BinaryPrimitives.ReadInt32LittleEndian(provider.Provide(virtualAddress, 4));
-                var sizeFixedUp = (!isPE32Plus && size == 0)
-                    ? 64
-                    : size;
-
-                // GuardRFFailureRoutineFunctionPointer      | 136 | 224
-                // DynamicValueRelocTableOffset              | 140 | 228
-                // DynamicValueRelocTableSection             | 142 | 230
-
-                if (isPE32Plus)
-                {
-                    if (230 <= sizeFixedUp)
-                    {
-                        var pair = provider.Locate(virtualAddress + 224, 6);
-                        exe.AsMemory(pair.Start, pair.Length).Span.Clear();
-                    }
-                    else
-                    {
-                        Console.Error.WriteLine("Warn: DynamicValueRelocTableOffset and Section isn't included.");
-                    }
-                }
-                else
-                {
-                    if (142 <= sizeFixedUp)
-                    {
-                        var pair = provider.Locate(virtualAddress + 136, 6);
-                        exe.AsMemory(pair.Start, pair.Length).Span.Clear();
-                    }
-                    else
-                    {
-                        Console.Error.WriteLine("Warn: DynamicValueRelocTableOffset and Section isn't included.");
-                    }
-                }
-
                 File.WriteAllBytes(opt.PEFileSaveTo, exe);
                 return 0;
             }
             else
             {
-                Console.Error.WriteLine("Error: loadConfigDirEntry not found!");
                 return 1;
             }
         }
