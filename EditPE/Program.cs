@@ -566,7 +566,7 @@ namespace EditPE
                         Console.WriteLine("Info: Add new section \"{0}\", and then write to there.", ".sect1");
 
                         offset = 0;
-                        section = Convert.ToUInt16(header.Sections.Count);
+                        section = Convert.ToUInt16(1 + header.Sections.Count);
                     }
 
                     pe = pair.Value.PeMod;
