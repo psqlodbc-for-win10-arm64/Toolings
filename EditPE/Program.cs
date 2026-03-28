@@ -114,26 +114,8 @@ namespace EditPE
         private static int DoApplyDvrt(ApplyDvrtOpt opt)
         {
             var exe = File.ReadAllBytes(opt.PEFileLoadFrom);
-            var lookAtLoadConfig = LookAtLoadConfig1.Create(exe);
-            if (lookAtLoadConfig != null)
+            if (new ApplyDvrtHelper().ApplyDvrt(exe))
             {
-                var parseHeader = new ParseHeader();
-                var header = parseHeader.Parse(exe);
-                var provider = new VAReadOnlySpanProvider(
-                    exe,
-                    header.Sections
-                );
-                var patchableVASpanProvider = new PatchableVASpanProvider(provider.Provide);
-
-                lookAtLoadConfig.ApplyDvrt(patchableVASpanProvider);
-
-                foreach (var one in patchableVASpanProvider.PatchRecords)
-                {
-                    var pair = provider.Locate(one.Rva, one.Bytes.Length);
-
-                    one.Bytes.CopyTo(exe.AsMemory(pair.Start, pair.Length));
-                }
-
                 File.WriteAllBytes(opt.PEFileSaveTo, exe);
                 return 0;
             }
