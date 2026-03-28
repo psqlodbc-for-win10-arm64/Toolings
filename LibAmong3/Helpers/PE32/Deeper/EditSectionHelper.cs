@@ -10,7 +10,7 @@ namespace LibAmong3.Helpers.PE32.Deeper
 {
     public class EditSectionHelper
     {
-        public (Memory<byte> PeMod, int PointerToWrite)? TryToGlowSection(
+        public (Memory<byte> PeMod, int PointerToWrite, int VirtualAddress, int SectionIndex)? TryToGlowSection(
             ReadOnlyMemory<byte> pe,
             int sectionIndex,
             int bytesToGlow,
@@ -36,7 +36,7 @@ namespace LibAmong3.Helpers.PE32.Deeper
 
                 if (header.Sections.Any(
                     it => false
-                        || it.VirtualAddress <= rva0 && rva0 < it.VirtualAddress + it.SizeOfRawData
+                        || it.VirtualAddress <= rva0 && rva0 < it.VirtualAddress + it.VirtualSize
                         || rva0 <= it.VirtualAddress && it.VirtualAddress < rva1
                 ))
                 {
@@ -50,13 +50,15 @@ namespace LibAmong3.Helpers.PE32.Deeper
                 peMod = InsertAt(peMod, insertPoint, bytesActualGlow);
 
                 int pointer = -1;
+                int va = -1;
 
                 for (int y = 0, cy = header.Sections.Count; y < cy; y++)
                 {
                     var sect1 = MapSection(peMod, header.PEOffset, header.OptHeaderSize, y);
                     if (sectionIndex == y)
                     {
-                        pointer = sect1.PointerToRawData + sect1.VirtualSize + padLeft;
+                        va = sect1.VirtualSize + padLeft;
+                        pointer = sect1.PointerToRawData + va;
                         sect1.SizeOfRawData += bytesActualGlow;
                         sect1.VirtualSize += padLeft + bytesToGlow;
                     }
@@ -66,7 +68,7 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     }
                 }
 
-                return (peMod, pointer);
+                return (peMod, pointer, va, sectionIndex);
             }
             else if (sect.SizeOfRawData <= sect.VirtualSize + padLeft + bytesToGlow)
             {
@@ -80,7 +82,7 @@ namespace LibAmong3.Helpers.PE32.Deeper
 
                 if (header.Sections.Any(
                     it => false
-                        || it.VirtualAddress <= rva0 && rva0 < it.VirtualAddress + it.SizeOfRawData
+                        || it.VirtualAddress <= rva0 && rva0 < it.VirtualAddress + it.VirtualSize
                         || rva0 <= it.VirtualAddress && it.VirtualAddress < rva1
                 ))
                 {
@@ -94,13 +96,15 @@ namespace LibAmong3.Helpers.PE32.Deeper
                 peMod = InsertAt(peMod, insertPoint, bytesActualGlow);
 
                 int pointer = -1;
+                int va = -1;
 
                 for (int y = 0, cy = header.Sections.Count; y < cy; y++)
                 {
                     var sect1 = MapSection(peMod, header.PEOffset, header.OptHeaderSize, y);
                     if (sectionIndex == y)
                     {
-                        pointer = sect1.PointerToRawData + sect1.VirtualSize + padLeft;
+                        va = sect1.VirtualSize + padLeft;
+                        pointer = sect1.PointerToRawData + va;
                         sect1.SizeOfRawData += bytesActualGlow;
                         sect1.VirtualSize += padLeft + bytesToGlow;
                     }
@@ -110,17 +114,18 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     }
                 }
 
-                return (peMod, pointer);
+                return (peMod, pointer, va, sectionIndex);
             }
             else
             {
                 var sect1 = MapSection(peMod, header.PEOffset, header.OptHeaderSize, sectionIndex);
 
                 int pointer = sect1.PointerToRawData + sect1.VirtualSize + padLeft;
+                int va = sect1.VirtualSize + padLeft;
 
                 sect1.VirtualSize += padLeft + bytesToGlow;
 
-                return (peMod, pointer);
+                return (peMod, pointer, va, sectionIndex);
             }
         }
 
@@ -156,6 +161,12 @@ namespace LibAmong3.Helpers.PE32.Deeper
                 get => BinaryPrimitives.ReadInt32LittleEndian(Buf.Slice(20, 4).Span);
                 set => BinaryPrimitives.WriteInt32LittleEndian(Buf.Slice(20, 4).Span, value);
             }
+
+            public int Characteristics
+            {
+                get => BinaryPrimitives.ReadInt32LittleEndian(Buf.Slice(0x24, 4).Span);
+                set => BinaryPrimitives.WriteInt32LittleEndian(Buf.Slice(0x24, 4).Span, value);
+            }
         }
 
         private Memory<byte> InsertAt(ReadOnlyMemory<byte> source, int at, int length)
@@ -166,7 +177,7 @@ namespace LibAmong3.Helpers.PE32.Deeper
             return buf;
         }
 
-        public (Memory<byte> PeMod, int PointerToWrite) AddNewSection(
+        public (Memory<byte> PeMod, int PointerToWrite, int VirtualAddress, int SectionIndex) AddNewSection(
             ReadOnlyMemory<byte> pe,
             string sectionName,
             int sizeOfRawData,
@@ -214,10 +225,11 @@ namespace LibAmong3.Helpers.PE32.Deeper
                 sect1.VirtualSize = sizeOfRawData;
                 sect1.VirtualAddress = header.Sections
                     .Max(it => (it.VirtualAddress + it.SizeOfRawData + 15) & ~15);
+                sect1.Characteristics = 0x42000040;
 
                 peMod = InsertAt(peMod, pointerToWrite, bytesActualGlow);
 
-                return (peMod, pointerToWrite);
+                return (peMod, pointerToWrite, 0, numOfSections);
             }
         }
 

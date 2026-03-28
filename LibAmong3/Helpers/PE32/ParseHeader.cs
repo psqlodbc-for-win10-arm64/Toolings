@@ -103,7 +103,8 @@ namespace LibAmong3.Helpers.PE32
                     VirtualSize: BinaryPrimitives.ReadInt32LittleEndian(sectionHeader.Slice(0x28 * index + 8, 4)),
                     VirtualAddress: BinaryPrimitives.ReadInt32LittleEndian(sectionHeader.Slice(0x28 * index + 12, 4)),
                     SizeOfRawData: BinaryPrimitives.ReadInt32LittleEndian(sectionHeader.Slice(0x28 * index + 16, 4)),
-                    PointerToRawData: BinaryPrimitives.ReadInt32LittleEndian(sectionHeader.Slice(0x28 * index + 20, 4))
+                    PointerToRawData: BinaryPrimitives.ReadInt32LittleEndian(sectionHeader.Slice(0x28 * index + 20, 4)),
+                    Characteristics: BinaryPrimitives.ReadInt32LittleEndian(sectionHeader.Slice(0x28 * index + 0x24, 4))
                 );
             }
             return list;

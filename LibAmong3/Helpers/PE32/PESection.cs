@@ -11,7 +11,8 @@ namespace LibAmong3.Helpers.PE32
         int VirtualSize,
         int VirtualAddress,
         int SizeOfRawData,
-        int PointerToRawData)
+        int PointerToRawData,
+        int Characteristics)
     {
     }
 }

@@ -478,18 +478,19 @@ namespace EditPE
         private static void PrintPESections(IEnumerable<PESection> sections)
         {
             {
-                Console.WriteLine("Name     | VirtualAddress      | AtFile   | Size     | VirtSize ");
-                Console.WriteLine("---------|---------------------|----------|----------|----------");
+                Console.WriteLine("Name     | VirtualAddress      | AtFile   | Size     | VirtSize | Character");
+                Console.WriteLine("---------|---------------------|----------|----------|----------|----------");
             }
             foreach (var sect in sections)
             {
-                Console.WriteLine("{0,-8} | {1:X8} - {2:X8} | {3:X8} | {4:X8} | {5:X8} "
+                Console.WriteLine("{0,-8} | {1:X8} - {2:X8} | {3:X8} | {4:X8} | {5:X8} | {6:X8} "
                     , sect.Name
                     , sect.VirtualAddress
                     , sect.VirtualAddress + sect.SizeOfRawData - 1
                     , sect.PointerToRawData
                     , sect.SizeOfRawData
                     , sect.VirtualSize
+                    , sect.Characteristics
                     );
             }
         }
@@ -547,26 +548,17 @@ namespace EditPE
 
                     var editSectionHelper = new EditSectionHelper();
 
-                    ushort section;
-                    int offset;
-
                     if (editSectionHelper.TryToGlowSection(pe, sectIdx, bytesToAdd) is var pair && pair != null)
                     {
                         // acquired
 
                         Console.WriteLine("Info: Glow the existing section \"{0}\", and then write to the appended space.", sectAt.Name);
-
-                        offset = sectAt.SizeOfRawData;
-                        section = Convert.ToUInt16(1 + sectIdx);
                     }
                     else
                     {
-                        pair = editSectionHelper.AddNewSection(pe, ".sect1", bytesToAdd);
+                        pair = editSectionHelper.AddNewSection(pe, ".reloc", bytesToAdd);
 
-                        Console.WriteLine("Info: Add new section \"{0}\", and then write to there.", ".sect1");
-
-                        offset = 0;
-                        section = Convert.ToUInt16(1 + header.Sections.Count);
+                        Console.WriteLine("Info: Add new section \"{0}\", and then write to there.", ".reloc");
                     }
 
                     pe = pair.Value.PeMod;
@@ -574,8 +566,8 @@ namespace EditPE
 
                     var ok = new ModifyDvrtPointerHelper().ModifyDvrtPointer(
                         exe: pair.Value.PeMod,
-                        offset: offset,
-                        section: section,
+                        offset: pair.Value.VirtualAddress,
+                        section: Convert.ToUInt16(1 + pair.Value.SectionIndex),
                         logWarn: s => Console.Error.WriteLine("Warn: {0}", s),
                         logError: s => Console.Error.WriteLine("Error: {0}", s)
                     );
