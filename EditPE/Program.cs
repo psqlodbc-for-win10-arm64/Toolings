@@ -540,26 +540,49 @@ namespace EditPE
                 var sectAt = header.Sections[sectIdx];
                 Console.WriteLine("Info: Current DVRT is located at section \"{0}\"", sectAt.Name);
 
+
                 {
                     var bytesToAdd = dvrt.Length;
 
                     var editSectionHelper = new EditSectionHelper();
+
+                    ushort section;
+                    int offset;
 
                     if (editSectionHelper.TryToGlowSection(pe, sectIdx, bytesToAdd) is var pair && pair != null)
                     {
                         // acquired
 
                         Console.WriteLine("Info: Glow the existing section \"{0}\", and then write to the appended space.", sectAt.Name);
+
+                        offset = sectAt.SizeOfRawData;
+                        section = Convert.ToUInt16(1 + sectIdx);
                     }
                     else
                     {
                         pair = editSectionHelper.AddNewSection(pe, ".sect1", bytesToAdd);
 
                         Console.WriteLine("Info: Add new section \"{0}\", and then write to there.", ".sect1");
+
+                        offset = 0;
+                        section = Convert.ToUInt16(header.Sections.Count);
                     }
 
                     pe = pair.Value.PeMod;
                     dvrt.CopyTo(pe.Slice(pair.Value.PointerToWrite));
+
+                    var ok = new ModifyDvrtPointerHelper().ModifyDvrtPointer(
+                        exe: pair.Value.PeMod,
+                        offset: offset,
+                        section: section,
+                        logWarn: s => Console.Error.WriteLine("Warn: {0}", s),
+                        logError: s => Console.Error.WriteLine("Error: {0}", s)
+                    );
+
+                    if (!ok)
+                    {
+                        return 1;
+                    }
                 }
 
                 Console.WriteLine();
