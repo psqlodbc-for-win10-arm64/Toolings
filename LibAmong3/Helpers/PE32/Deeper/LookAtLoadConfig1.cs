@@ -158,7 +158,6 @@ namespace LibAmong3.Helpers.PE32.Deeper
                                 {
                                     case 0: // zero fill
                                         {
-                                            //TODO: untested
                                             var offset = word & 0x0FFF;
                                             var size = 1 << ((meta >> 2) & 3);
 
@@ -183,10 +182,9 @@ namespace LibAmong3.Helpers.PE32.Deeper
                                         break;
                                     case 2: // add or sub
                                         {
-                                            //TODO: untested
                                             var offset = word & 0x0FFF;
                                             var sign = ((meta & 4) != 0) ? -1 : 1;
-                                            var scale = ((meta & 4) != 0) ? 8 : 4;
+                                            var scale = ((meta & 8) != 0) ? 8 : 4;
 
                                             var rwAt = targetRva + offset;
 
