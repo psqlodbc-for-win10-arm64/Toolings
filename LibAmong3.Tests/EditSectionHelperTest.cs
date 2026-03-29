@@ -18,7 +18,7 @@ namespace LibAmong3.Tests
         [TestCase("arm64x.dll")]
         [TestCase("x64.dll")]
         [TestCase("x86.dll")]
-        public void Grow(string dllName)
+        public void AppendData(string dllName)
         {
             var pe = File.ReadAllBytes($@"Files\{dllName}").AsMemory();
 
@@ -45,12 +45,16 @@ namespace LibAmong3.Tests
 
             for (int y = 0; y < headerBefore.Sections.Count; y++)
             {
-                Console.WriteLine("Append to section #{0} \"{1}\"", y, headerBefore.Sections[y].Name);
+                Console.WriteLine("Append {2} bytes data to section #{0} \"{1}\""
+                    , y
+                    , headerBefore.Sections[y].Name
+                    , bytesAppended.Length
+                );
 
                 var pair = editSectionHelper.TryToGlowSection(pe, y, bytesAppended.Length);
                 if (pair.HasValue)
                 {
-                    Console.WriteLine("  Grow mode");
+                    Console.WriteLine("  TryToGlowSection = true");
                     var peMod = pair.Value.PeMod;
                     bytesAppended.CopyTo(peMod.Slice(pair.Value.PointerToWrite));
 
@@ -60,11 +64,21 @@ namespace LibAmong3.Tests
                         .Select(it => peMod.Slice(it.PointerToRawData, Math.Min(it.VirtualSize, it.SizeOfRawData)).ToArray())
                         .ToArray();
 
+                    Console.WriteLine("  Now compare section count {0} ⇔ {1} (after ⇔ before)"
+                        , headerAfter.Sections.Count
+                        , headerBefore.Sections.Count
+                    );
+
                     Assert.That(headerAfter.Sections.Count, Is.EqualTo(headerBefore.Sections.Count));
 
                     for (int t = 0; t < headerBefore.Sections.Count; t++)
                     {
-                        Console.WriteLine("  Compare {0} ; {1,5} {2,5}  {3,5}", t, sectionBinBefore[t].Bin.Length, sectionBinBefore[t].AppendedAt, sectionBinAfter[t].Length);
+                        Console.WriteLine("  Compare section #{0} ; curLen {1,5} appendAt {2,5}  newLen {3,5}"
+                            , t
+                            , sectionBinBefore[t].Bin.Length
+                            , sectionBinBefore[t].AppendedAt
+                            , sectionBinAfter[t].Length
+                        );
                         if (y == t)
                         {
                             Assert.That(sectionBinAfter[t].AsMemory(0, sectionBinBefore[t].Bin.Length).ToArray(), Is.EqualTo(sectionBinBefore[t].Bin));
@@ -78,7 +92,7 @@ namespace LibAmong3.Tests
                 }
                 else
                 {
-                    Console.WriteLine("  New section mode");
+                    Console.WriteLine("  TryToGlowSection = false, AddNewSection");
 
                     pair = editSectionHelper.AddNewSection(pe, ".sect1", bytesAppended.Length);
                     var peMod = pair.Value.PeMod;
@@ -90,19 +104,34 @@ namespace LibAmong3.Tests
                         .Select(it => peMod.Slice(it.PointerToRawData, it.VirtualSize).ToArray())
                         .ToArray();
 
+                    Console.WriteLine("  Now compare section count {0} ⇔ {1} (after ⇔ before)"
+                        , headerAfter.Sections.Count
+                        , headerBefore.Sections.Count
+                    );
+
                     Assert.That(headerAfter.Sections.Count, Is.EqualTo(headerBefore.Sections.Count + 1));
 
                     int t = 0;
 
                     for (; t < headerBefore.Sections.Count; t++)
                     {
-                        Console.WriteLine("  Compare {0} ; {1,5} {2,5}  {3,5}", t, sectionBinBefore[t].Bin.Length, "", sectionBinAfter[t].Length);
+                        Console.WriteLine("  Compare section #{0} ; curLen {1,5} appendAt {2,5}  newLen {3,5}"
+                            , t
+                            , sectionBinBefore[t].Bin.Length
+                            , ""
+                            , sectionBinAfter[t].Length
+                        );
 
                         Assert.That(sectionBinAfter[t], Is.EqualTo(sectionBinBefore[t].Bin));
                     }
 
                     {
-                        Console.WriteLine("  Compare {0} ; {1,5} {2,5}  {3,5}", t, bytesAppended.Length, "", sectionBinAfter[t].Length);
+                        Console.WriteLine("  Compare section #{0} ; expect {1,5} appendAt {2,5}  newLen {3,5}"
+                            , t
+                            , bytesAppended.Length
+                            , ""
+                            , sectionBinAfter[t].Length
+                        );
 
                         Assert.That(sectionBinAfter[t], Is.EqualTo(bytesAppended));
                     }
