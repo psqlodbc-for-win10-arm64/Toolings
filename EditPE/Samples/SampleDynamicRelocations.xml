@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DynamicRelocations xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Arm64X>
+    <Group Rva="0x0000A000">
+      <Entry Offset="0x120" Type="DELTA" Sign="1" Scale="4" Value="11 11" />
+      <Entry Offset="0x124" Type="DELTA" Sign="1" Scale="8" Value="11 11" />
+      <Entry Offset="0x128" Type="DELTA" Sign="-1" Scale="4" Value="11 11" />
+      <Entry Offset="0x12C" Type="DELTA" Sign="-1" Scale="8" Value="11 11" />
+      <Entry Offset="0x130" Type="VALUE" Size="2" Value="12 34" />
+      <Entry Offset="0x134" Type="VALUE" Size="4" Value="12 34 56 78" />
+      <Entry Offset="0x138" Type="VALUE" Size="8" Value="11 22 33 44 55 66 77 88" />
+      <Entry Offset="0x140" Type="ZEROFILL" Size="0x2" />
+      <Entry Offset="0x144" Type="ZEROFILL" Size="0x4" />
+      <Entry Offset="0x150" Type="ZEROFILL" Size="0x8" />
+    </Group>
+  </Arm64X>
+</DynamicRelocations>
