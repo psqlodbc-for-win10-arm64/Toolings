@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -24,6 +26,36 @@ namespace LibAmong3.Helpers.PE32
                 Characteristics: ReadHelper.U32(ref span)
             );
             return new PETLSDirectory(header1);
+        }
+
+        public IReadOnlyCollection<ulong> ParseCallbacks(
+            ProvideReadOnlySpanDelegate provide,
+            ulong addressOfCallback,
+            ulong imageBase,
+            bool isPE32Plus
+            )
+        {
+            var tlsCallbacks = new List<ulong>();
+
+            var rva = addressOfCallback - imageBase;
+
+            for (int x = 0; ; x++)
+            {
+                var one = isPE32Plus
+                    ? BinaryPrimitives.ReadUInt64LittleEndian(
+                        provide(Convert.ToInt32(rva + (uint)(8 * x)), 8)
+                    )
+                    : BinaryPrimitives.ReadUInt32LittleEndian(
+                        provide(Convert.ToInt32(rva - imageBase + (uint)(4 * x)), 4)
+                    );
+                tlsCallbacks.Add(one);
+                if (one == 0)
+                {
+                    break;
+                }
+            }
+
+            return tlsCallbacks.AsReadOnly();
         }
     }
 }

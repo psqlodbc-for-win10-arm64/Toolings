@@ -62,7 +62,8 @@ namespace InspectTLSCallback
                         pe,
                         header.Sections
                     );
-                    var tlsHeader = new ParseTLSDirectory().Parse(
+                    var parseTLSDirectory = new ParseTLSDirectory();
+                    var tlsHeader = parseTLSDirectory.Parse(
                         provider.Provide,
                         tlsDirectoryEntry.VirtualAddress,
                         header.IsPE32Plus
@@ -79,22 +80,12 @@ namespace InspectTLSCallback
 
                     if (tlsHeader.AddressOfCallback != 0)
                     {
-                        var tlsCallbacks = new List<ulong>();
-                        for (int x = 0; ; x++)
-                        {
-                            var one = header.IsPE32Plus
-                                ? BinaryPrimitives.ReadUInt64LittleEndian(
-                                    provider.Provide(Convert.ToInt32(tlsHeader.AddressOfCallback - header.ImageBase + (uint)(8 * x)), 8)
-                                )
-                                : BinaryPrimitives.ReadUInt32LittleEndian(
-                                    provider.Provide(Convert.ToInt32(tlsHeader.AddressOfCallback - header.ImageBase + (uint)(4 * x)), 4)
-                                );
-                            tlsCallbacks.Add(one);
-                            if (one == 0)
-                            {
-                                break;
-                            }
-                        }
+                        var tlsCallbacks = parseTLSDirectory.ParseCallbacks(
+                            provide: provider.Provide,
+                            addressOfCallback: tlsHeader.AddressOfCallback,
+                            imageBase: header.ImageBase,
+                            isPE32Plus: header.IsPE32Plus
+                        );
 
                         Console.WriteLine();
                         Console.WriteLine("    TLS Callbacks");
