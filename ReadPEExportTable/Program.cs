@@ -1,5 +1,6 @@
 ﻿using CommandLine;
 using LibAmong3.Helpers.PE32;
+using LibAmong3.Helpers.PE32.Deeper;
 using System.Linq;
 using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
@@ -21,6 +22,9 @@ namespace ReadPEExportTable
 
             [Option('o', "output-to-file", HelpText = "Output the result to a file.")]
             public string? OutputToFile { get; set; }
+
+            [Option('t', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
+            public bool ApplyDvrt { get; set; }
         }
 
         [Verb("print-def", HelpText = "Print the export table as a .def file from a PE file.")]
@@ -40,6 +44,9 @@ namespace ReadPEExportTable
 
             [Option("no-forwarders", HelpText = "Do not include forwarders in the output.")]
             public bool NoForwarders { get; set; }
+
+            [Option('t', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
+            public bool ApplyDvrt { get; set; }
         }
 
         static int Main(string[] args)
@@ -55,7 +62,7 @@ namespace ReadPEExportTable
         private static int DoPrintDefDll(PrintDefDllOpt opt)
         {
             using var writer = GetWriter(opt);
-            var loaded = LoadDirectory(opt.FilePath);
+            var loaded = LoadDirectory(opt.FilePath, opt.ApplyDvrt);
             if (loaded != null)
             {
                 writer.WriteLine($"LIBRARY {Path.GetFileNameWithoutExtension(loaded.Directory.DLLName)}");
@@ -81,7 +88,7 @@ namespace ReadPEExportTable
         private static int DoPrintExportDll(PrintExportDllOpt opt)
         {
             using var writer = GetWriter(opt);
-            var loaded = LoadDirectory(opt.FilePath);
+            var loaded = LoadDirectory(opt.FilePath, opt.ApplyDvrt);
             if (loaded != null)
             {
                 writer.WriteLine($"DLL Name: {loaded.Directory.DLLName}");
@@ -165,9 +172,13 @@ namespace ReadPEExportTable
             GetForwarderFromRVADelegate? GetForwarderFromRVA
         );
 
-        private static LoadedDirectory? LoadDirectory(string filePath)
+        private static LoadedDirectory? LoadDirectory(string filePath, bool applyDvrt)
         {
             var dll = File.ReadAllBytes(filePath);
+            if (applyDvrt)
+            {
+                new ApplyDvrtHelper().ApplyDvrt(dll);
+            }
             var header = new ParseHeader().Parse(dll);
             var exportTable = header.GetImageDirectoryOrEmpty(0);
             if (exportTable == PEImageDataDirectory.Empty)
