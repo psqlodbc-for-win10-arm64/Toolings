@@ -95,6 +95,12 @@ namespace InspectTLSCallback
 
             [Option('a', "apply-dvrt", HelpText = "Apply DVRT before resolving.")]
             public bool AppltDvrt { get; set; }
+
+            [Option('x', "hex", HelpText = "Print file offwset in 64 bits upper hex (e.g. 0123456789ABCDEF).")]
+            public bool Hex { get; set; }
+
+            [Option('e', "print-error", HelpText = "Print error messages if applicable.")]
+            public bool PrintError { get; set; }
         }
 
         static int Main(string[] args)
@@ -125,26 +131,62 @@ namespace InspectTLSCallback
                 header.Sections
             );
 
-            var va = PaseUInt64(opt.VirtualAddress);
-
             try
             {
+                var va = PaseUInt64(opt.VirtualAddress);
+
                 var filePos = provider.Locate(
                     rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
                     size: 0
                 )
                     .Start;
 
-                Console.Write(filePos);
+                Console.Write(opt.Hex ? $"{filePos:X16}" : $"{filePos}");
                 return 0;
+            }
+            catch (FormatException)
+            {
+                if (opt.PrintError)
+                {
+                    throw;
+                }
+                else
+                {
+                    return 1;
+                }
+            }
+            catch (OverflowException)
+            {
+                if (opt.PrintError)
+                {
+                    throw;
+                }
+                else
+                {
+                    return 1;
+                }
             }
             catch (EndOfStreamException)
             {
-                return 1;
+                if (opt.PrintError)
+                {
+                    throw;
+                }
+                else
+                {
+                    return 1;
+                }
             }
             catch (ArgumentException)
             {
-                return 1;
+                if (opt.PrintError)
+                {
+                    throw;
+                }
+                else
+                {
+                    return 1;
+                }
             }
         }
 
