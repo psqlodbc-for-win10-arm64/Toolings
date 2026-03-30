@@ -1,7 +1,10 @@
-﻿using CommandLine;
+﻿using AsmArm64;
+using CommandLine;
 using LibAmong3.Helpers.PE32;
 using LibAmong3.Helpers.PE32.Deeper;
 using System.Buffers.Binary;
+using System.IO;
+using System.Text.RegularExpressions;
 
 namespace InspectTLSCallback
 {
@@ -39,6 +42,13 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
+            var disasmAArch64 = new Arm64Disassembler(
+                new Arm64DisassemblerOptions
+                {
+                    PrintLabelBeforeFirstInstruction = false,
+                }
+            );
+
             for (int pass = 0; pass < 2; pass++)
             {
                 if (pass == 0)
@@ -55,6 +65,21 @@ namespace InspectTLSCallback
                 var header = new ParseHeader().Parse(pe);
                 Console.WriteLine();
                 Console.WriteLine($"  {header.Machine,16:X4} machine");
+
+                var arm64EC = false;
+
+                var lookAtLoadConfig = LookAtLoadConfig1.Create(pe);
+                if (lookAtLoadConfig != null)
+                {
+                    var chpeVersion = lookAtLoadConfig.GetCHPEVersion();
+                    Console.WriteLine($"  {chpeVersion,16} CHPE Version");
+                    if (chpeVersion == 2 && header.Machine == 0x8664)
+                    {
+                        Console.WriteLine($"  {"",16} This is an Arm64EC! (chpeVersion == 2 && header.Machine == 0x8664)");
+                        arm64EC = true;
+                    }
+                }
+
                 var tlsDirectoryEntry = header.GetImageDirectoryOrEmpty(9);
                 if (tlsDirectoryEntry.Size != 0)
                 {
@@ -97,11 +122,114 @@ namespace InspectTLSCallback
                         {
                             Console.WriteLine($"    {one:X16}");
                         }
+
+                        foreach (var rva in tlsCallbacks)
+                        {
+                            if (rva != 0)
+                            {
+                                var bytes = provider.Provide(Convert.ToInt32(rva - header.ImageBase), -64)
+                                    .ToArray()
+                                    .AsSpan(); // AsmArm64 requests writable Span<byte>
+
+                                void DumpHex(ReadOnlySpan<byte> bytes, ulong addr, string prefix)
+                                {
+                                    Console.WriteLine();
+                                    Console.WriteLine(prefix + "VirtualAddress   | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+                                    Console.WriteLine(prefix + "-----------------|------------------------------------------------");
+                                    for (int y = 0; y < bytes.Length; y += 16)
+                                    {
+                                        Console.Write(prefix + $"{addr + (uint)y:X16} |");
+                                        for (int x = 0; x < 16; x++)
+                                        {
+                                            if (y + x < bytes.Length)
+                                            {
+                                                Console.Write($" {bytes[y + x]:X2}");
+                                            }
+                                            else
+                                            {
+                                                Console.Write("   ");
+                                            }
+                                        }
+                                        Console.WriteLine();
+                                    }
+                                }
+
+                                DumpHex(bytes, rva, "    ");
+
+                                if (header.Machine == 0xAA64 || arm64EC)
+                                {
+                                    void DisasmAArch64(Span<byte> bytes, ulong addr, string prefix)
+                                    {
+                                        Console.WriteLine();
+                                        Console.WriteLine(prefix + "AArch64 disassembly by AsmArm64");
+                                        Console.WriteLine(prefix + "---");
+
+                                        for (int y = 0; y < bytes.Length / 4; y++)
+                                        {
+                                            Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}   {disasmAArch64.Disassemble(bytes.Slice(4 * y, 4)).Trim()}");
+                                        }
+                                    }
+
+                                    DisasmAArch64(bytes, rva, "    ");
+
+                                    if (TryToGetJumpDestination(bytes, disasmAArch64, rva, out ulong next))
+                                    {
+                                        Console.WriteLine();
+                                        Console.WriteLine($"    Navigate to the destination at {next:X16}");
+
+                                        var nextBytes = provider.Provide(Convert.ToInt32(next - header.ImageBase), -64)
+                                            .ToArray()
+                                            .AsSpan();
+
+                                        DumpHex(nextBytes, next, "      ");
+                                        DisasmAArch64(nextBytes, next, "      ");
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             return 0;
+        }
+
+        private static bool TryToGetJumpDestination(Span<byte> bytes, Arm64Disassembler disassembler, ulong rva, out ulong next)
+        {
+            if (12 <= bytes.Length)
+            {
+                // adrp x16, #-4096
+                var match1 = Regex.Match(
+                    disassembler.Disassemble(bytes.Slice(0, 4)),
+                    "^\\s*adrp\\s+x16\\s*,\\s*#(?<imm>-?\\d+)\\s*$"
+                );
+                if (match1.Success)
+                {
+                    var imm = Convert.ToInt64(match1.Groups["imm"].Value);
+                    // add x16, x16, #2168
+                    var match2 = Regex.Match(
+                        disassembler.Disassemble(bytes.Slice(4, 4)),
+                        "^\\s*add\\s*x16\\s*,\\s*x16\\s*,\\s*#(?<imm>-?\\d+)\\s*$"
+                    );
+                    if (match2.Success)
+                    {
+                        var imm2 = Convert.ToInt32(match2.Groups["imm"].Value);
+                        // br x16
+                        var match3 = Regex.Match(
+                            disassembler.Disassemble(bytes.Slice(8, 4)),
+                            "^\\s*br\\s*x16\\s*$"
+                        );
+                        if (match3.Success)
+                        {
+                            next = (ulong)((long)(rva & ~4095UL) + imm + imm2);
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            next = default;
+            return false;
         }
     }
 }
