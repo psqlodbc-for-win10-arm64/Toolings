@@ -81,16 +81,71 @@ namespace InspectTLSCallback
             public bool AppltDvrt { get; set; }
         }
 
+        [Verb("locate", HelpText = "Resolve virtual address and try to print file offset of a PE file.")]
+        private class LocateOpt
+        {
+            [Value(0, Required = true, MetaName = "PEInput")]
+            public string PEInput { get; set; } = null!;
+
+            [Value(1, Required = true, MetaName = "VirtualAddress")]
+            public string VirtualAddress { get; set; } = null!;
+
+            [Option('r', "relative", HelpText = "Use relative addressing instead of absolute.")]
+            public bool Relative { get; set; }
+
+            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before resolving.")]
+            public bool AppltDvrt { get; set; }
+        }
+
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt>(args)
-                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, int>(
+            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, LocateOpt>(args)
+                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, LocateOpt, int>(
                     DoInspect,
                     DoDisasm,
                     DoHexDump,
                     DoDump,
+                    DoLocate,
                     errs => 1
                 );
+        }
+
+        private static int DoLocate(LocateOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
+
+            if (opt.AppltDvrt)
+            {
+                new ApplyDvrtHelper().ApplyDvrt(pe);
+            }
+
+            var header = new ParseHeader().Parse(pe);
+            var provider = new VAReadOnlySpanProvider(
+                pe,
+                header.Sections
+            );
+
+            var va = PaseUInt64(opt.VirtualAddress);
+
+            try
+            {
+                var filePos = provider.Locate(
+                    rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
+                    size: 0
+                )
+                    .Start;
+
+                Console.Write(filePos);
+                return 0;
+            }
+            catch (EndOfStreamException)
+            {
+                return 1;
+            }
+            catch (ArgumentException)
+            {
+                return 1;
+            }
         }
 
         private static int DoDump(DumpOpt opt)
