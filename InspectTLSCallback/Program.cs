@@ -334,7 +334,22 @@ namespace InspectTLSCallback
                 {
                     Console.WriteLine();
                     Console.WriteLine("# After apply Dvrt");
-                    new ApplyDvrtHelper().ApplyDvrt(pe);
+
+                    var applier = new ApplyDvrtHelper().CreateDvrtApplier(pe);
+                    if (!applier.HasLoadConfig)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("(Omit due to lack of LoadConfig)");
+                        break;
+                    }
+                    if (applier.NumPatchedRecords == 0 || applier.ApplyPatches == null)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("(Omit due to lack of applicable patches)");
+                        break;
+                    }
+
+                    applier.ApplyPatches();
                 }
 
                 var header = new ParseHeader().Parse(pe);
