@@ -35,6 +35,9 @@ namespace InspectTLSCallback
 
             [Option('a', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
             public bool AppltDvrt { get; set; }
+
+            [Option('x', "x64", HelpText = "Disassemble as x64 code instead of AArch64.")]
+            public bool X64 { get; set; }
         }
 
         [Verb("hex-dump", HelpText = "Hex dump of a PE file referenced by virtual address.")]
@@ -152,13 +155,6 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
-            var disasmAArch64 = new Arm64Disassembler(
-                new Arm64DisassemblerOptions
-                {
-                    PrintLabelBeforeFirstInstruction = false,
-                }
-            );
-
             if (opt.AppltDvrt)
             {
                 new ApplyDvrtHelper().ApplyDvrt(pe);
@@ -179,13 +175,16 @@ namespace InspectTLSCallback
                 .ToArray()
                     .AsSpan(); // AsmArm64 requests writable Span<byte>
 
-            DisasmAArch64(
-                bytes,
-                va,
-                "",
-                disasmAArch64,
+            var disasm = opt.X64
+                ? CreateX64Disasm()
+                : CreateAArch64Disasm();
+
+            disasm(
+                bytes: bytes,
+                addr: va,
+                prefix: "",
                 showBanner: false
-                );
+            );
 
             return 0;
         }
@@ -226,12 +225,7 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
-            var disasmAArch64 = new Arm64Disassembler(
-                new Arm64DisassemblerOptions
-                {
-                    PrintLabelBeforeFirstInstruction = false,
-                }
-            );
+            var disasmAArch64 = CreateAArch64Disasm();
 
             for (int pass = 0; pass < 2; pass++)
             {
@@ -319,9 +313,9 @@ namespace InspectTLSCallback
 
                                 if (header.Machine == 0xAA64 || arm64EC)
                                 {
-                                    DisasmAArch64(bytes, rva, "    ", disasmAArch64);
+                                    disasmAArch64(bytes, rva, "    ");
 
-                                    if (TryToGetJumpDestination(bytes, disasmAArch64, rva, out ulong next))
+                                    if (TryToGetJumpDestination(bytes, rva, out ulong next))
                                     {
                                         Console.WriteLine();
                                         Console.WriteLine($"    Navigate to the destination at {next:X16}");
@@ -331,7 +325,7 @@ namespace InspectTLSCallback
                                             .AsSpan();
 
                                         DumpHex(nextBytes, next, "      ");
-                                        DisasmAArch64(nextBytes, next, "      ", disasmAArch64);
+                                        disasmAArch64(nextBytes, next, "      ");
                                     }
                                 }
                             }
@@ -366,23 +360,15 @@ namespace InspectTLSCallback
             }
         }
 
-        private static void DisasmAArch64(Span<byte> bytes, ulong addr, string prefix, Arm64Disassembler disasmAArch64, bool showBanner = true)
+        private static bool TryToGetJumpDestination(Span<byte> bytes, ulong rva, out ulong next)
         {
-            if (showBanner)
-            {
-                Console.WriteLine();
-                Console.WriteLine(prefix + "AArch64 disassembly by AsmArm64");
-                Console.WriteLine(prefix + "---");
-            }
+            var disassembler = new Arm64Disassembler(
+                new Arm64DisassemblerOptions
+                {
+                    PrintLabelBeforeFirstInstruction = false,
+                }
+            );
 
-            for (int y = 0; y < bytes.Length / 4; y++)
-            {
-                Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}   {disasmAArch64.Disassemble(bytes.Slice(4 * y, 4)).Trim()}");
-            }
-        }
-
-        private static bool TryToGetJumpDestination(Span<byte> bytes, Arm64Disassembler disassembler, ulong rva, out ulong next)
-        {
             if (12 <= bytes.Length)
             {
                 // adrp x16, #-4096
@@ -417,6 +403,99 @@ namespace InspectTLSCallback
 
             next = default;
             return false;
+        }
+
+        private delegate void DisasmDelegate(
+            Span<byte> bytes,
+            ulong addr,
+            string prefix,
+            bool showBanner = true);
+
+        private static DisasmDelegate CreateAArch64Disasm()
+        {
+            var disasmAArch64 = new Arm64Disassembler(
+                new Arm64DisassemblerOptions
+                {
+                    PrintLabelBeforeFirstInstruction = false,
+                }
+            );
+
+            return (bytes, addr, prefix, showBanner) =>
+            {
+                if (showBanner)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine(prefix + "AArch64 disassembly by AsmArm64");
+                    Console.WriteLine(prefix + "---");
+                }
+
+                for (int y = 0; y < bytes.Length / 4; y++)
+                {
+                    var span = bytes.Slice(4 * y, 4);
+                    // `dumpbin /disasm` compatible output.
+                    Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}: {BinaryPrimitives.ReadUInt32LittleEndian(span):X8}  {disasmAArch64.Disassemble(span).Trim()}");
+                }
+            };
+        }
+
+        private static DisasmDelegate CreateX64Disasm()
+        {
+            return (bytes, addr, prefix, showBanner) =>
+            {
+                if (showBanner)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine(prefix + "x64 disassembly by Iced");
+                    Console.WriteLine(prefix + "---");
+                }
+
+                var decoder = Iced.Intel.Decoder.Create(
+                    bitness: 64,
+                    data: bytes.ToArray(),
+                    ip: addr,
+                    options: Iced.Intel.DecoderOptions.None
+                );
+
+                foreach (var instruction in decoder)
+                {
+                    // `dumpbin /disasm` compatible output.
+                    //   0000000000000058: FF 15 00 00 00 00  call        qword ptr [__imp___stdio_common_vfprintf]
+                    var lines = FormatX64InstructionBytes(
+                        bytes.Slice(
+                            Convert.ToInt32(instruction.IP - addr),
+                            instruction.Length
+                        )
+                    )
+                        .ToArray();
+
+                    Console.WriteLine(prefix + $"{instruction.IP:X16}:{lines[0]}  {instruction.ToString()}");
+
+                    for (int y = 1; y < lines.Length; y++)
+                    {
+                        Console.WriteLine(prefix + $"{"",16} {lines[y]}");
+                    }
+                }
+            };
+        }
+
+        private static IEnumerable<string> FormatX64InstructionBytes(Span<byte> span)
+        {
+            var list = new List<string>();
+            for (int y = 0; y < span.Length; y += 6)
+            {
+                int x = 0;
+                var line = "";
+                for (; x < 6 && y + x < span.Length; x++)
+                {
+                    line += ($" {span[y + x]:X2}");
+                }
+                for (; x < 6; x++)
+                {
+                    line += ("   ");
+                }
+                list.Add(line);
+            }
+            return list.AsReadOnly();
         }
     }
 }
