@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReadPEExportTable", "ReadPE
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EditPE", "EditPE\EditPE.csproj", "{39B3D223-C861-45C5-AB73-4E4351D4D4FB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InspectTLSCallback", "InspectTLSCallback\InspectTLSCallback.csproj", "{340014D8-9982-4FED-A8D2-AC87256FB357}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +89,10 @@ Global
 		{39B3D223-C861-45C5-AB73-4E4351D4D4FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{39B3D223-C861-45C5-AB73-4E4351D4D4FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{39B3D223-C861-45C5-AB73-4E4351D4D4FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{340014D8-9982-4FED-A8D2-AC87256FB357}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{340014D8-9982-4FED-A8D2-AC87256FB357}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{340014D8-9982-4FED-A8D2-AC87256FB357}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{340014D8-9982-4FED-A8D2-AC87256FB357}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
