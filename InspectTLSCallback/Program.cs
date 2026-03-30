@@ -40,7 +40,7 @@ namespace InspectTLSCallback
             public bool X64 { get; set; }
         }
 
-        [Verb("hex-dump", HelpText = "Hex dump of a PE file referenced by virtual address.")]
+        [Verb("dump", HelpText = "Hex dump of a PE file referenced by virtual address.")]
         private class HexDumpOpt
         {
             [Value(0, Required = true, MetaName = "PEInput")]
@@ -59,7 +59,7 @@ namespace InspectTLSCallback
             public bool AppltDvrt { get; set; }
         }
 
-        [Verb("dump", HelpText = "Dump of a PE file referenced by virtual address.")]
+        [Verb("dump-file", HelpText = "Dump of a PE file referenced by virtual address.")]
         private class DumpOpt
         {
             [Value(0, Required = true, MetaName = "PEInput")]
@@ -530,7 +530,15 @@ namespace InspectTLSCallback
                 {
                     var span = bytes.Slice(4 * y, 4);
                     // `dumpbin /disasm` compatible output.
-                    Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}: {BinaryPrimitives.ReadUInt32LittleEndian(span):X8}  {disasmAArch64.Disassemble(span).Trim()}");
+                    var disasm = disasmAArch64.Disassemble(span).Trim();
+
+                    // Reformat `LL_01:     adrp x10, LL_01` → `adrp x10, #0`
+                    if (disasm.Contains("LL_01:"))
+                    {
+                        disasm = disasm.Split('\n').Last().Replace("LL_01", "#0").Trim();
+                    }
+
+                    Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}: {BinaryPrimitives.ReadUInt32LittleEndian(span):X8}  {disasm}");
                 }
             };
         }
