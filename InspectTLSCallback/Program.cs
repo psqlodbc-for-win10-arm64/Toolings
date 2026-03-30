@@ -34,7 +34,7 @@ namespace InspectTLSCallback
             public bool Relative { get; set; }
 
             [Option('a', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
-            public bool AppltDvrt { get; set; }
+            public bool ApplyDvrt { get; set; }
 
             [Option('x', "x64", HelpText = "Disassemble as x64 code instead of AArch64.")]
             public bool X64 { get; set; }
@@ -56,10 +56,10 @@ namespace InspectTLSCallback
             public bool Relative { get; set; }
 
             [Option('a', "apply-dvrt", HelpText = "Apply DVRT before dump.")]
-            public bool AppltDvrt { get; set; }
+            public bool ApplyDvrt { get; set; }
         }
 
-        [Verb("dump-file", HelpText = "Dump of a PE file referenced by virtual address.")]
+        [Verb("dump-to", HelpText = "Dump to a file from the part of a PE file referenced by virtual address.")]
         private class DumpOpt
         {
             [Value(0, Required = true, MetaName = "PEInput")]
@@ -78,7 +78,7 @@ namespace InspectTLSCallback
             public bool Relative { get; set; }
 
             [Option('a', "apply-dvrt", HelpText = "Apply DVRT before dump.")]
-            public bool AppltDvrt { get; set; }
+            public bool ApplyDvrt { get; set; }
         }
 
         [Verb("locate", HelpText = "Resolve virtual address and try to print file offset of a PE file.")]
@@ -94,7 +94,7 @@ namespace InspectTLSCallback
             public bool Relative { get; set; }
 
             [Option('a', "apply-dvrt", HelpText = "Apply DVRT before resolving.")]
-            public bool AppltDvrt { get; set; }
+            public bool ApplyDvrt { get; set; }
 
             [Option('x', "hex", HelpText = "Print file offwset in 64 bits upper hex (e.g. 0123456789ABCDEF).")]
             public bool Hex { get; set; }
@@ -120,7 +120,7 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
-            if (opt.AppltDvrt)
+            if (opt.ApplyDvrt)
             {
                 new ApplyDvrtHelper().ApplyDvrt(pe);
             }
@@ -194,7 +194,7 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
-            if (opt.AppltDvrt)
+            if (opt.ApplyDvrt)
             {
                 new ApplyDvrtHelper().ApplyDvrt(pe);
             }
@@ -225,7 +225,7 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
-            if (opt.AppltDvrt)
+            if (opt.ApplyDvrt)
             {
                 new ApplyDvrtHelper().ApplyDvrt(pe);
             }
@@ -252,7 +252,7 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
-            if (opt.AppltDvrt)
+            if (opt.ApplyDvrt)
             {
                 new ApplyDvrtHelper().ApplyDvrt(pe);
             }
