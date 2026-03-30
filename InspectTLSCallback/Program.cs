@@ -52,19 +52,73 @@ namespace InspectTLSCallback
             [Option('r', "relative", HelpText = "Use relative addressing instead of absolute.")]
             public bool Relative { get; set; }
 
-            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
+            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before dump.")]
+            public bool AppltDvrt { get; set; }
+        }
+
+        [Verb("dump", HelpText = "Dump of a PE file referenced by virtual address.")]
+        private class DumpOpt
+        {
+            [Value(0, Required = true, MetaName = "PEInput")]
+            public string PEInput { get; set; } = null!;
+
+            [Value(1, Required = true, MetaName = "VirtualAddress")]
+            public string VirtualAddress { get; set; } = null!;
+
+            [Value(2, Required = false, MetaName = "Size", Default = "64")]
+            public string Size { get; set; } = null!;
+
+            [Value(3, Required = true, MetaName = "SaveTo")]
+            public string SaveTo { get; set; } = null!;
+
+            [Option('r', "relative", HelpText = "Use relative addressing instead of absolute.")]
+            public bool Relative { get; set; }
+
+            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before dump.")]
             public bool AppltDvrt { get; set; }
         }
 
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt>(args)
-                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, int>(
+            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt>(args)
+                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, int>(
                     DoInspect,
                     DoDisasm,
                     DoHexDump,
+                    DoDump,
                     errs => 1
                 );
+        }
+
+        private static int DoDump(DumpOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
+
+            if (opt.AppltDvrt)
+            {
+                new ApplyDvrtHelper().ApplyDvrt(pe);
+            }
+
+            var header = new ParseHeader().Parse(pe);
+            var provider = new VAReadOnlySpanProvider(
+                pe,
+                header.Sections
+            );
+
+            var va = PaseUInt64(opt.VirtualAddress);
+
+            var bytes = provider.Provide(
+                rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
+                size: Convert.ToInt32(PaseInt64(opt.Size))
+            );
+
+            using (var stream = File.Create(opt.SaveTo))
+            {
+                stream.Write(bytes);
+            }
+
+            Console.WriteLine($"Dumped {bytes.Length} bytes to {opt.SaveTo}");
+            return 0;
         }
 
         private static int DoHexDump(HexDumpOpt opt)
@@ -86,7 +140,7 @@ namespace InspectTLSCallback
 
             var bytes = provider.Provide(
                 rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
-                size: Convert.ToInt32(PaseUInt64(opt.Size))
+                size: Convert.ToInt32(PaseInt64(opt.Size))
             );
 
             DumpHex(bytes, va, "");
@@ -117,9 +171,10 @@ namespace InspectTLSCallback
             );
 
             var va = PaseUInt64(opt.VirtualAddress);
+
             var bytes = provider.Provide(
                 rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
-                size: Convert.ToInt32(PaseUInt64(opt.Size))
+                size: Convert.ToInt32(PaseInt64(opt.Size))
             )
                 .ToArray()
                     .AsSpan(); // AsmArm64 requests writable Span<byte>
@@ -148,6 +203,22 @@ namespace InspectTLSCallback
             else
             {
                 return Convert.ToUInt64(addr);
+            }
+        }
+
+        private static long PaseInt64(string addr)
+        {
+            if (addr.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return Convert.ToInt64(addr.Substring(2), 16);
+            }
+            else if (addr.Length == 16)
+            {
+                return Convert.ToInt64(addr, 16);
+            }
+            else
+            {
+                return Convert.ToInt64(addr);
             }
         }
 
