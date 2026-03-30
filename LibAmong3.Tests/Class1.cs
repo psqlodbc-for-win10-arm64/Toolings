@@ -1,5 +1,6 @@
 ﻿using CoffReader;
 using LibAmong3.Helpers;
+using LibAmong3.Helpers.PE32;
 using NUnit.Framework;
 using System.Linq;
 using System.Text;
@@ -592,6 +593,125 @@ namespace LibAmong3.Tests
                     Console.WriteLine(libFile);
                 }
             }
+        }
+
+        [Test]
+        [Ignore("TDD")]
+        public void FindPEFilesHavingTlsCallback()
+        {
+            foreach (var peFile in new string[0]
+                .Concat(Directory.GetFiles(@"C:\Windows", "*.dll"))
+                .Concat(Directory.GetFiles(@"C:\Windows", "*.exe"))
+                .Concat(Directory.GetFiles(@"C:\Windows\system32", "*.dll"))
+                .Concat(Directory.GetFiles(@"C:\Windows\system32", "*.exe"))
+                .Order()
+                )
+            {
+                try
+                {
+                    var pe = File.ReadAllBytes(peFile).AsMemory();
+
+                    var header = new ParseHeader().Parse(pe);
+                    var tlsDirectoryEntry = header.GetImageDirectoryOrEmpty(9);
+                    if (tlsDirectoryEntry.Size != 0)
+                    {
+                        var provider = new VAReadOnlySpanProvider(
+                            pe,
+                            header.Sections
+                        );
+                        var parseTLSDirectory = new ParseTLSDirectory();
+                        var tlsHeader = parseTLSDirectory.Parse(
+                            provider.Provide,
+                            tlsDirectoryEntry.VirtualAddress,
+                            header.IsPE32Plus
+                        )
+                            .Header1;
+
+                        if (tlsHeader.AddressOfCallback != 0)
+                        {
+                            var tlsCallbacks = parseTLSDirectory.ParseCallbacks(
+                                provide: provider.Provide,
+                                addressOfCallback: tlsHeader.AddressOfCallback,
+                                imageBase: header.ImageBase,
+                                isPE32Plus: header.IsPE32Plus
+                            );
+
+                            if (tlsCallbacks.Any(it => it != 0))
+                            {
+                                Console.WriteLine($"{tlsCallbacks.Count(),5} {peFile}");
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            #region Sample output on my 25H2
+            //    3 C:\Windows\system32\ActivationClient.dll
+            //    2 C:\Windows\system32\adal.dll
+            //    2 C:\Windows\system32\ATDELIB.DLL
+            //    2 C:\Windows\system32\cdp.dll
+            //    2 C:\Windows\system32\cdprt.dll
+            //    2 C:\Windows\system32\cdpsvc.dll
+            //    2 C:\Windows\system32\cdpusersvc.dll
+            //    2 C:\Windows\system32\Chakra.dll
+            //    2 C:\Windows\system32\CloudRecoveryDownloadTool.dll
+            //    3 C:\Windows\system32\CloudRestoreLauncher.dll
+            //    2 C:\Windows\system32\computecore.dll
+            //    2 C:\Windows\system32\computestorage.dll
+            //    2 C:\Windows\system32\containerdevicemanagement.dll
+            //    2 C:\Windows\system32\coreglobconfig.dll
+            //    3 C:\Windows\system32\D3DCompiler_47.dll
+            //    3 C:\Windows\system32\dbghelp.dll
+            //    3 C:\Windows\system32\dcntel.dll
+            //    2 C:\Windows\system32\diagtrack.dll
+            //    3 C:\Windows\system32\dwmscene.dll
+            //    3 C:\Windows\system32\edgehtml.dll
+            //    3 C:\Windows\system32\Facilitator.dll
+            //    3 C:\Windows\system32\FluencyDS.dll
+            //    3 C:\Windows\system32\gdi32full.dll
+            //    2 C:\Windows\system32\icsvcvss.dll
+            //    3 C:\Windows\system32\InputHost.dll
+            //    3 C:\Windows\system32\ISM.dll
+            //    2 C:\Windows\system32\mshtml.dll
+            //    2 C:\Windows\system32\MsSpellCheckingFacility.dll
+            //    3 C:\Windows\system32\ngcrecovery.dll
+            //    3 C:\Windows\system32\ocsetapi.dll
+            //    3 C:\Windows\system32\OneDriveSetup.exe
+            //    3 C:\Windows\system32\onnxruntime_arm64.dll
+            //    3 C:\Windows\system32\onnxruntime_x64.dll
+            //    3 C:\Windows\system32\PkgMgr.exe
+            //    2 C:\Windows\system32\QuietHours.dll
+            //    3 C:\Windows\system32\rdpbase.dll
+            //    3 C:\Windows\system32\schannel.dll
+            //    3 C:\Windows\system32\ServicingCommon.dll
+            //    3 C:\Windows\system32\ServicingUAPI.dll
+            //    3 C:\Windows\system32\shlwapi.dll
+            //    2 C:\Windows\system32\StartTileData.dll
+            //    3 C:\Windows\system32\StringFeedbackEngine.dll
+            //    2 C:\Windows\system32\sudo.exe
+            //    3 C:\Windows\system32\TextInputMethodFormatter.dll
+            //    2 C:\Windows\system32\ThreatAssessment.dll
+            //    3 C:\Windows\system32\tquery.dll
+            //    3 C:\Windows\system32\twinui.pcshell.dll
+            //    2 C:\Windows\system32\UdiApiClient.dll
+            //    2 C:\Windows\system32\UiaManager.dll
+            //    3 C:\Windows\system32\UIAutomationCore.dll
+            //    3 C:\Windows\system32\UpdateAgent.dll
+            //    2 C:\Windows\system32\vmdevicehost.dll
+            //    3 C:\Windows\system32\WindowManagementAPI.dll
+            //    3 C:\Windows\system32\Windows.CloudStore.dll
+            //    3 C:\Windows\system32\Windows.CloudStore.EarlyDownloader.dll
+            //    3 C:\Windows\system32\Windows.CloudStore.Schema.DesktopShell.dll
+            //    2 C:\Windows\system32\Windows.Devices.Perception.dll
+            //    2 C:\Windows\system32\Windows.Globalization.PhoneNumberFormatting.dll
+            //    2 C:\Windows\system32\Windows.Shell.BlueLightReduction.dll
+            //    3 C:\Windows\system32\Windows.UI.Xaml.Controls.dll
+            //    3 C:\Windows\system32\Windows.UI.Xaml.dll
+            #endregion
         }
     }
 }
