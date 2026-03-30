@@ -4,38 +4,151 @@ using LibAmong3.Helpers.PE32;
 using LibAmong3.Helpers.PE32.Deeper;
 using System.Buffers.Binary;
 using System.IO;
+using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
 
 namespace InspectTLSCallback
 {
     internal class Program
     {
-        [Verb("inspect")]
+        [Verb("inspect", HelpText = "Inspect TLS callback of a PE file.")]
         private class InspectOpt
         {
             [Value(0, Required = true, MetaName = "PEInput")]
             public string PEInput { get; set; } = null!;
         }
 
-        [Verb("dummy")]
-        private class DummyOpt
+        [Verb("disasm", HelpText = "Disassemble AArch64 code referenced by virtual address.")]
+        private class DisasmOpt
         {
+            [Value(0, Required = true, MetaName = "PEInput")]
+            public string PEInput { get; set; } = null!;
 
+            [Value(1, Required = true, MetaName = "VirtualAddress")]
+            public string VirtualAddress { get; set; } = null!;
+
+            [Value(2, Required = false, MetaName = "Size", Default = "64")]
+            public string Size { get; set; } = null!;
+
+            [Option('r', "relative", HelpText = "Use relative addressing instead of absolute.")]
+            public bool Relative { get; set; }
+
+            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
+            public bool AppltDvrt { get; set; }
+        }
+
+        [Verb("hex-dump", HelpText = "Hex dump of a PE file referenced by virtual address.")]
+        private class HexDumpOpt
+        {
+            [Value(0, Required = true, MetaName = "PEInput")]
+            public string PEInput { get; set; } = null!;
+
+            [Value(1, Required = true, MetaName = "VirtualAddress")]
+            public string VirtualAddress { get; set; } = null!;
+
+            [Value(2, Required = false, MetaName = "Size", Default = "64")]
+            public string Size { get; set; } = null!;
+
+            [Option('r', "relative", HelpText = "Use relative addressing instead of absolute.")]
+            public bool Relative { get; set; }
+
+            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before disassembly.")]
+            public bool AppltDvrt { get; set; }
         }
 
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<InspectOpt, DummyOpt>(args)
-                .MapResult<InspectOpt, DummyOpt, int>(
+            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt>(args)
+                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, int>(
                     DoInspect,
-                    DoDummy,
+                    DoDisasm,
+                    DoHexDump,
                     errs => 1
                 );
         }
 
-        private static int DoDummy(DummyOpt opt)
+        private static int DoHexDump(HexDumpOpt opt)
         {
-            throw new NotImplementedException();
+            var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
+
+            if (opt.AppltDvrt)
+            {
+                new ApplyDvrtHelper().ApplyDvrt(pe);
+            }
+
+            var header = new ParseHeader().Parse(pe);
+            var provider = new VAReadOnlySpanProvider(
+                pe,
+                header.Sections
+            );
+
+            var va = PaseUInt64(opt.VirtualAddress);
+
+            var bytes = provider.Provide(
+                rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
+                size: Convert.ToInt32(PaseUInt64(opt.Size))
+            );
+
+            DumpHex(bytes, va, "");
+
+            return 0;
+        }
+
+        private static int DoDisasm(DisasmOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
+
+            var disasmAArch64 = new Arm64Disassembler(
+                new Arm64DisassemblerOptions
+                {
+                    PrintLabelBeforeFirstInstruction = false,
+                }
+            );
+
+            if (opt.AppltDvrt)
+            {
+                new ApplyDvrtHelper().ApplyDvrt(pe);
+            }
+
+            var header = new ParseHeader().Parse(pe);
+            var provider = new VAReadOnlySpanProvider(
+                pe,
+                header.Sections
+            );
+
+            var va = PaseUInt64(opt.VirtualAddress);
+            var bytes = provider.Provide(
+                rva: Convert.ToInt32(opt.Relative ? va : va - header.ImageBase),
+                size: Convert.ToInt32(PaseUInt64(opt.Size))
+            )
+                .ToArray()
+                    .AsSpan(); // AsmArm64 requests writable Span<byte>
+
+            DisasmAArch64(
+                bytes,
+                va,
+                "",
+                disasmAArch64,
+                showBanner: false
+                );
+
+            return 0;
+        }
+
+        private static ulong PaseUInt64(string addr)
+        {
+            if (addr.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return Convert.ToUInt64(addr.Substring(2), 16);
+            }
+            else if (addr.Length == 16)
+            {
+                return Convert.ToUInt64(addr, 16);
+            }
+            else
+            {
+                return Convert.ToUInt64(addr);
+            }
         }
 
         private static int DoInspect(InspectOpt opt)
@@ -131,46 +244,11 @@ namespace InspectTLSCallback
                                     .ToArray()
                                     .AsSpan(); // AsmArm64 requests writable Span<byte>
 
-                                void DumpHex(ReadOnlySpan<byte> bytes, ulong addr, string prefix)
-                                {
-                                    Console.WriteLine();
-                                    Console.WriteLine(prefix + "VirtualAddress   | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
-                                    Console.WriteLine(prefix + "-----------------|------------------------------------------------");
-                                    for (int y = 0; y < bytes.Length; y += 16)
-                                    {
-                                        Console.Write(prefix + $"{addr + (uint)y:X16} |");
-                                        for (int x = 0; x < 16; x++)
-                                        {
-                                            if (y + x < bytes.Length)
-                                            {
-                                                Console.Write($" {bytes[y + x]:X2}");
-                                            }
-                                            else
-                                            {
-                                                Console.Write("   ");
-                                            }
-                                        }
-                                        Console.WriteLine();
-                                    }
-                                }
-
                                 DumpHex(bytes, rva, "    ");
 
                                 if (header.Machine == 0xAA64 || arm64EC)
                                 {
-                                    void DisasmAArch64(Span<byte> bytes, ulong addr, string prefix)
-                                    {
-                                        Console.WriteLine();
-                                        Console.WriteLine(prefix + "AArch64 disassembly by AsmArm64");
-                                        Console.WriteLine(prefix + "---");
-
-                                        for (int y = 0; y < bytes.Length / 4; y++)
-                                        {
-                                            Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}   {disasmAArch64.Disassemble(bytes.Slice(4 * y, 4)).Trim()}");
-                                        }
-                                    }
-
-                                    DisasmAArch64(bytes, rva, "    ");
+                                    DisasmAArch64(bytes, rva, "    ", disasmAArch64);
 
                                     if (TryToGetJumpDestination(bytes, disasmAArch64, rva, out ulong next))
                                     {
@@ -182,7 +260,7 @@ namespace InspectTLSCallback
                                             .AsSpan();
 
                                         DumpHex(nextBytes, next, "      ");
-                                        DisasmAArch64(nextBytes, next, "      ");
+                                        DisasmAArch64(nextBytes, next, "      ", disasmAArch64);
                                     }
                                 }
                             }
@@ -192,6 +270,44 @@ namespace InspectTLSCallback
             }
 
             return 0;
+        }
+
+        private static void DumpHex(ReadOnlySpan<byte> bytes, ulong addr, string prefix)
+        {
+            Console.WriteLine();
+            Console.WriteLine(prefix + "VirtualAddress   | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F");
+            Console.WriteLine(prefix + "-----------------|------------------------------------------------");
+            for (int y = 0; y < bytes.Length; y += 16)
+            {
+                Console.Write(prefix + $"{addr + (uint)y:X16} |");
+                for (int x = 0; x < 16; x++)
+                {
+                    if (y + x < bytes.Length)
+                    {
+                        Console.Write($" {bytes[y + x]:X2}");
+                    }
+                    else
+                    {
+                        Console.Write("   ");
+                    }
+                }
+                Console.WriteLine();
+            }
+        }
+
+        private static void DisasmAArch64(Span<byte> bytes, ulong addr, string prefix, Arm64Disassembler disasmAArch64, bool showBanner = true)
+        {
+            if (showBanner)
+            {
+                Console.WriteLine();
+                Console.WriteLine(prefix + "AArch64 disassembly by AsmArm64");
+                Console.WriteLine(prefix + "---");
+            }
+
+            for (int y = 0; y < bytes.Length / 4; y++)
+            {
+                Console.WriteLine(prefix + $"{addr + (uint)(4 * y):X16}   {disasmAArch64.Disassemble(bytes.Slice(4 * y, 4)).Trim()}");
+            }
         }
 
         private static bool TryToGetJumpDestination(Span<byte> bytes, Arm64Disassembler disassembler, ulong rva, out ulong next)
