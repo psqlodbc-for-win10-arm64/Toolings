@@ -13,7 +13,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
     public record LookAtLoadConfig1(
         Func<int> GetCHPEVersion,
         Func<bool> HasDvrtToMakeX64,
-        Func<PatchableVASpanProvider, LookAtLoadConfig1.ApplyDvrtResult> ApplyDvrt)
+        Func<PatchableVASpanProvider, LookAtLoadConfig1.ApplyDvrtResult> ApplyDvrt,
+        Func<ulong> GetCHPEMetadataPointer)
     {
         public static LookAtLoadConfig1? Create(ReadOnlyMemory<byte> exe)
         {
@@ -32,6 +33,11 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     virtualAddress: loadConfigDirEntry.VirtualAddress,
                     isPE32Plus: header.IsPE32Plus
                 );
+
+                ulong GetCHPEMetadataPointer()
+                {
+                    return loadConfigDir.Header1.CHPEMetadataPointer;
+                }
 
                 int GetCHPEVersion()
                 {
@@ -238,7 +244,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
                 return new LookAtLoadConfig1(
                     GetCHPEVersion: GetCHPEVersion,
                     HasDvrtToMakeX64: HasDvrtToMakeX64,
-                    ApplyDvrt: ApplyDvrt);
+                    ApplyDvrt: ApplyDvrt,
+                    GetCHPEMetadataPointer: GetCHPEMetadataPointer);
             }
             else
             {

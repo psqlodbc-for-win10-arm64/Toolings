@@ -103,17 +103,131 @@ namespace InspectTLSCallback
             public bool PrintError { get; set; }
         }
 
+        [Verb("chpe", HelpText = "Display CHPE header.")]
+        private class ChpeOpt
+        {
+            [Value(0, Required = true, MetaName = "PEInput")]
+            public string PEInput { get; set; } = null!;
+
+            [Option('a', "apply-dvrt", HelpText = "Apply DVRT before dump.")]
+            public bool ApplyDvrt { get; set; }
+        }
+
         static int Main(string[] args)
         {
-            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, LocateOpt>(args)
-                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, LocateOpt, int>(
+            return Parser.Default.ParseArguments<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, LocateOpt, ChpeOpt>(args)
+                .MapResult<InspectOpt, DisasmOpt, HexDumpOpt, DumpOpt, LocateOpt, ChpeOpt, int>(
                     DoInspect,
                     DoDisasm,
                     DoHexDump,
                     DoDump,
                     DoLocate,
+                    DoChpe,
                     errs => 1
                 );
+        }
+
+        private static int DoChpe(ChpeOpt opt)
+        {
+            var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
+
+            if (opt.ApplyDvrt)
+            {
+                new ApplyDvrtHelper().ApplyDvrt(pe);
+            }
+
+            var header = new ParseHeader().Parse(pe);
+            var provider = new VAReadOnlySpanProvider(
+                pe,
+                header.Sections
+            );
+
+            var lookAtLoadConfig = LookAtLoadConfig1.Create(pe);
+            if (lookAtLoadConfig != null)
+            {
+                var chpeVersion = lookAtLoadConfig.GetCHPEVersion();
+                Console.WriteLine($"  {chpeVersion,16} CHPE Version");
+                if (chpeVersion == 2)
+                {
+                    var chpeMetadataPointer = lookAtLoadConfig.GetCHPEMetadataPointer();
+                    if (chpeMetadataPointer != 0)
+                    {
+                        var chpeV2Header = new ParseChpeV2Header().Parse(
+                            provider.Provide,
+                            Convert.ToInt32(chpeMetadataPointer - header.ImageBase)
+                        );
+
+                        var vaTable = (uint)chpeV2Header.HybridCodeAddressRangeTable + header.ImageBase;
+                        Console.WriteLine();
+                        Console.WriteLine($"  {chpeV2Header.OffsetOfArm64XArm64xRedirectionMetadataTable,16:X8} Offset of Arm64X arm64x redirection metadata table");
+                        Console.WriteLine($"  {chpeV2Header.CountOfArm64XArm64xRedirectionMetadataTableEntries,16:X}  Count of Arm64X arm64x redirection metadata table entries");
+                        Console.WriteLine();
+                        Console.WriteLine($"  {vaTable,16:X16} Hybrid code address range table");
+                        Console.WriteLine($"  {chpeV2Header.HybridCodeAddressRangeCount,16:X} Hybrid code address range count");
+
+                        if (true
+                            && chpeV2Header.HybridCodeAddressRangeTable != 0
+                            && chpeV2Header.HybridCodeAddressRangeCount != 0
+                        )
+                        {
+                            Console.WriteLine();
+                            Console.WriteLine("  Hybrid Code Address Range Table");
+                            Console.WriteLine();
+                            Console.WriteLine("              Address Range");
+                            Console.WriteLine("        ----------------------");
+
+                            var span = provider.Provide(
+                                chpeV2Header.HybridCodeAddressRangeTable,
+                                8 * chpeV2Header.HybridCodeAddressRangeCount
+                            );
+
+                            var abiTypes = "arm64,arm64ec,x64,3".Split(',');
+
+                            for (int y = 0; y < chpeV2Header.HybridCodeAddressRangeCount; y++)
+                            {
+                                int typeNum = span[8 * y] & 3;
+
+                                var rvaFrom = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(8 * y)) & ~3;
+                                var size = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(8 * y + 4));
+                                var rvaTo = rvaFrom + size - 1;
+                                var vaFrom = (uint)rvaFrom + header.ImageBase;
+                                var vaTo = (uint)rvaTo + header.ImageBase;
+
+                                Console.WriteLine($"  {abiTypes[typeNum],11}  {vaFrom:X16} - {vaTo:X16} ({rvaFrom:X8} - {rvaTo:X8})");
+                            }
+                        }
+
+                        if (true
+                            && chpeV2Header.OffsetOfArm64XArm64xRedirectionMetadataTable != 0
+                            && chpeV2Header.CountOfArm64XArm64xRedirectionMetadataTableEntries != 0
+                        )
+                        {
+                            var span = provider.Provide(
+                                chpeV2Header.OffsetOfArm64XArm64xRedirectionMetadataTable,
+                                8 * chpeV2Header.CountOfArm64XArm64xRedirectionMetadataTableEntries
+                            );
+
+                            Console.WriteLine();
+                            Console.WriteLine("  Arm64X Redirection Metadata Table");
+                            Console.WriteLine();
+                            Console.WriteLine("        FFS Start           ARM64EC Address");
+                            Console.WriteLine("        ------------------------------------");
+
+                            for (int y = 0; y < chpeV2Header.CountOfArm64XArm64xRedirectionMetadataTableEntries; y++)
+                            {
+                                var rvaFrom = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(8 * y));
+                                var rvaTo = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(8 * y + 4));
+                                var vaFrom = rvaFrom + header.ImageBase;
+                                var vaTo = rvaTo + header.ImageBase;
+
+                                Console.WriteLine($"        {vaFrom:X16} -> {vaTo:X16}");
+                            }
+                        }
+                    }
+                }
+            }
+
+            return 0;
         }
 
         private static int DoLocate(LocateOpt opt)
