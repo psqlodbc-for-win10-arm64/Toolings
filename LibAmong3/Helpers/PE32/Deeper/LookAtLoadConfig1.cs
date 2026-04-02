@@ -14,7 +14,8 @@ namespace LibAmong3.Helpers.PE32.Deeper
         Func<int> GetCHPEVersion,
         Func<bool> HasDvrtToMakeX64,
         Func<PatchableVASpanProvider, LookAtLoadConfig1.ApplyDvrtResult> ApplyDvrt,
-        Func<ulong> GetCHPEMetadataPointer)
+        Func<ulong> GetCHPEMetadataPointer,
+        Func<Func<ulong, bool>> CreateRtlIsEcCode)
     {
         public static LookAtLoadConfig1? Create(ReadOnlyMemory<byte> exe)
         {
@@ -241,11 +242,56 @@ namespace LibAmong3.Helpers.PE32.Deeper
                     return machine == 0x8664;
                 }
 
+                Func<ulong, bool> CreateRtlIsEcCode()
+                {
+                    if (GetCHPEVersion() == 2)
+                    {
+                        var chpeMetadataPointer = GetCHPEMetadataPointer();
+                        if (chpeMetadataPointer != 0)
+                        {
+                            var chpeV2Header = new ParseChpeV2Header().Parse(
+                                provider.Provide,
+                                Convert.ToInt32(chpeMetadataPointer - header.ImageBase)
+                            );
+
+                            if (true
+                                && chpeV2Header.HybridCodeAddressRangeTable != 0
+                                && chpeV2Header.HybridCodeAddressRangeCount != 0
+                            )
+                            {
+                                var hybridCodeAddressRangeTable = new ParseHybridCodeAddressRangeTable().Parse(
+                                    provider.Provide,
+                                    chpeV2Header.HybridCodeAddressRangeTable,
+                                    chpeV2Header.HybridCodeAddressRangeCount
+                                )
+                                    .Entries
+                                    .Where(
+                                        one => one.AbiType == 1
+                                    )
+                                    .Select(one => (
+                                        Start: header.ImageBase + (uint)one.RvaFrom,
+                                        End: header.ImageBase + (uint)one.RvaFrom + (uint)one.Size
+                                    ))
+                                    .ToArray();
+
+                                return va =>
+                                {
+                                    return hybridCodeAddressRangeTable
+                                        .Any(one => one.Start <= va && va < one.End);
+                                };
+                            }
+                        }
+                    }
+
+                    return _ => false;
+                }
+
                 return new LookAtLoadConfig1(
                     GetCHPEVersion: GetCHPEVersion,
                     HasDvrtToMakeX64: HasDvrtToMakeX64,
                     ApplyDvrt: ApplyDvrt,
-                    GetCHPEMetadataPointer: GetCHPEMetadataPointer);
+                    GetCHPEMetadataPointer: GetCHPEMetadataPointer,
+                    CreateRtlIsEcCode: CreateRtlIsEcCode);
             }
             else
             {

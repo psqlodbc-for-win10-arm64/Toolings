@@ -5,6 +5,7 @@ using LibAmong3.Helpers.PE32.Deeper;
 using System.Buffers.Binary;
 using System.IO;
 using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace InspectTLSCallback
@@ -176,24 +177,24 @@ namespace InspectTLSCallback
                             Console.WriteLine("              Address Range");
                             Console.WriteLine("        ----------------------");
 
-                            var span = provider.Provide(
+                            var hybridCodeAddressRangeTable = new ParseHybridCodeAddressRangeTable().Parse(
+                                provider.Provide,
                                 chpeV2Header.HybridCodeAddressRangeTable,
-                                8 * chpeV2Header.HybridCodeAddressRangeCount
-                            );
+                                chpeV2Header.HybridCodeAddressRangeCount
+                            )
+                                .Entries;
 
-                            var abiTypes = "arm64,arm64ec,x64,3".Split(',');
-
-                            for (int y = 0; y < chpeV2Header.HybridCodeAddressRangeCount; y++)
+                            for (int y = 0; y < hybridCodeAddressRangeTable.Count; y++)
                             {
-                                int typeNum = span[8 * y] & 3;
+                                var entry = hybridCodeAddressRangeTable[y];
 
-                                var rvaFrom = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(8 * y)) & ~3;
-                                var size = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(8 * y + 4));
+                                var rvaFrom = entry.RvaFrom;
+                                var size = entry.Size;
                                 var rvaTo = rvaFrom + size - 1;
                                 var vaFrom = (uint)rvaFrom + header.ImageBase;
                                 var vaTo = (uint)rvaTo + header.ImageBase;
 
-                                Console.WriteLine($"  {abiTypes[typeNum],11}  {vaFrom:X16} - {vaTo:X16} ({rvaFrom:X8} - {rvaTo:X8})");
+                                Console.WriteLine($"  {HybridCodeAddressRangeTable.GetAbiType(entry.AbiType),11}  {vaFrom:X16} - {vaTo:X16} ({rvaFrom:X8} - {rvaTo:X8})");
                             }
                         }
 
@@ -436,6 +437,7 @@ namespace InspectTLSCallback
         {
             var pe = File.ReadAllBytes(opt.PEInput).AsMemory();
 
+            var disasmX64 = CreateX64Disasm();
             var disasmAArch64 = CreateAArch64Disasm();
 
             for (int pass = 0; pass < 2; pass++)
@@ -472,6 +474,8 @@ namespace InspectTLSCallback
 
                 var arm64EC = false;
 
+                Func<ulong, bool> rtlIsEcCode = _ => false;
+
                 var lookAtLoadConfig = LookAtLoadConfig1.Create(pe);
                 if (lookAtLoadConfig != null)
                 {
@@ -482,6 +486,8 @@ namespace InspectTLSCallback
                         Console.WriteLine($"  {"",16} This is an Arm64EC! (chpeVersion == 2 && header.Machine == 0x8664)");
                         arm64EC = true;
                     }
+
+                    rtlIsEcCode = lookAtLoadConfig.CreateRtlIsEcCode();
                 }
 
                 var tlsDirectoryEntry = header.GetImageDirectoryOrEmpty(9);
@@ -522,9 +528,46 @@ namespace InspectTLSCallback
                         Console.WriteLine("    Address");
                         Console.WriteLine("    ----------------");
 
+                        IsArm64Reason1 GetIsArm64Reason(ulong va)
+                        {
+                            if (va == 0)
+                            {
+                                return new IsArm64Reason1(
+                                    Arch: IsArm64Reason1.Arch1.Unknown);
+                            }
+                            else if (header.Machine == 0xAA64)
+                            {
+                                return new IsArm64Reason1(
+                                    Arch: IsArm64Reason1.Arch1.Arm64);
+                            }
+                            else if (header.Machine == 0x8664)
+                            {
+                                if (arm64EC)
+                                {
+                                    return rtlIsEcCode(va)
+                                        ? new IsArm64Reason1(
+                                            Arch: IsArm64Reason1.Arch1.Arm64EC,
+                                            Arm64ECBinary: true)
+                                        : new IsArm64Reason1(
+                                            Arch: IsArm64Reason1.Arch1.X64,
+                                            Arm64ECBinary: true);
+                                }
+                                else
+                                {
+                                    return new IsArm64Reason1(
+                                            Arch: IsArm64Reason1.Arch1.X64);
+                                }
+                            }
+                            else
+                            {
+                                return new IsArm64Reason1(
+                                    Arch: IsArm64Reason1.Arch1.Unknown);
+                            }
+                        }
+
                         foreach (var one in tlsCallbacks)
                         {
-                            Console.WriteLine($"    {one:X16}");
+                            Console.WriteLine($"    {one:X16}      {Describe(GetIsArm64Reason(one))}");
                         }
 
                         foreach (var rva in tlsCallbacks)
@@ -537,9 +580,20 @@ namespace InspectTLSCallback
 
                                 DumpHex(bytes, rva, "    ");
 
+                                var reason = GetIsArm64Reason(rva);
+
+                                DisasmDelegate disasm;
+                                switch (reason.Arch)
+                                {
+                                    case IsArm64Reason1.Arch1.Arm64: disasm = disasmAArch64; break;
+                                    case IsArm64Reason1.Arch1.Arm64EC: disasm = disasmAArch64; break;
+                                    case IsArm64Reason1.Arch1.X64: disasm = disasmX64; break;
+                                    default: disasm = DisasmNoop; break;
+                                }
+
                                 if (header.Machine == 0xAA64 || arm64EC)
                                 {
-                                    disasmAArch64(bytes, rva, "    ");
+                                    disasm(bytes, rva, "    ");
 
                                     if (TryToGetJumpDestination(bytes, rva, out ulong next))
                                     {
@@ -551,7 +605,7 @@ namespace InspectTLSCallback
                                             .AsSpan();
 
                                         DumpHex(nextBytes, next, "      ");
-                                        disasmAArch64(nextBytes, next, "      ");
+                                        disasm(nextBytes, next, "      ");
                                     }
                                 }
                             }
@@ -561,6 +615,26 @@ namespace InspectTLSCallback
             }
 
             return 0;
+        }
+
+        private static string Describe(IsArm64Reason1 reason)
+        {
+            if (reason.Arch == IsArm64Reason1.Arch1.X64)
+            {
+                return reason.Arm64ECBinary ? "RtlIsEcCode = false (x64)" : "x64";
+            }
+            else if (reason.Arch == IsArm64Reason1.Arch1.Arm64)
+            {
+                return "ARM64";
+            }
+            else if (reason.Arch == IsArm64Reason1.Arch1.Arm64EC)
+            {
+                return reason.Arm64ECBinary ? "RtlIsEcCode = true (ARM64EC)" : "ARM64EC";
+            }
+            else
+            {
+                return "";
+            }
         }
 
         private static void DumpHex(ReadOnlySpan<byte> bytes, ulong addr, string prefix)
@@ -629,6 +703,15 @@ namespace InspectTLSCallback
 
             next = default;
             return false;
+        }
+
+        private static void DisasmNoop(
+            Span<byte> bytes,
+            ulong addr,
+            string prefix,
+            bool showBanner = true)
+        {
+
         }
 
         private delegate void DisasmDelegate(
