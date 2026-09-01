@@ -24,6 +24,9 @@ namespace LibAmong3.Tests
         [TestCase("dllmain-x64.obj", Arm64XBinaryForm.X64Coff)]
         [TestCase("dllmain-x86.obj", Arm64XBinaryForm.X86Coff)]
         [TestCase("dllmain-arm64x.obj", Arm64XBinaryForm.Arm64XCoffUponX86Coff)]
+        [TestCase("llvm.obj_arm64ec.o", Arm64XBinaryForm.Arm64XCoffLLVMVariant)]
+        [TestCase("llvm-aarch64.o", Arm64XBinaryForm.Arm64Coff)]
+        [TestCase("llvm-arm64ec.o", Arm64XBinaryForm.Arm64ECCoff)]
         public void Guess(string dllName, Arm64XBinaryForm form)
         {
             var bytes = File.ReadAllBytes($@"Files\{dllName}");

@@ -29,7 +29,24 @@ namespace LibAmong3.Helpers.Guessr
                 }
                 else if (coffMagic == 0xAA64)
                 {
-                    return Arm64XBinaryForm.Arm64Coff;
+                    if (true
+                        && detectArm64X
+                        && 20 <= exe.Length
+                        && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(2, 2)) is ushort numOfSections
+                        && BinaryPrimitives.ReadUInt16LittleEndian(exe.Span.Slice(16, 2)) is ushort optHeaderSize
+                        && 20 + optHeaderSize + 40 * numOfSections <= exe.Length
+                        && ReadSectionNames(exe.Span.Slice(20 + optHeaderSize, 40 * numOfSections), numOfSections) is string[] sectionNames
+                        && ResolveLongerNames(exe.Span, sectionNames) is string[] sectionNames2
+                        && sectionNames2.Contains(".obj.arm64ec")
+                    )
+                    {
+                        // https://discourse.llvm.org/t/multi-architecture-coff-object-files-for-arm64x-using-an-extra-section/91030
+                        return Arm64XBinaryForm.Arm64XCoffLLVMVariant;
+                    }
+                    else
+                    {
+                        return Arm64XBinaryForm.Arm64Coff;
+                    }
                 }
                 else if (coffMagic == 0xA641)
                 {
@@ -41,19 +58,6 @@ namespace LibAmong3.Helpers.Guessr
                 }
                 else if (coffMagic == 0x014C)
                 {
-                    string[] ReadSectionNames(ReadOnlySpan<byte> sectionHeader, int numOfSections)
-                    {
-                        var list = new string[numOfSections];
-                        for (int index = 0; index < numOfSections; index++)
-                        {
-                            list[index] = Encoding.Latin1.GetString(
-                                sectionHeader.Slice(40 * index, 8)
-                            )
-                                .TrimEnd('\0', ' ');
-                        }
-                        return list;
-                    }
-
                     if (true
                         && detectArm64X
                         && 20 <= exe.Length
@@ -249,6 +253,44 @@ namespace LibAmong3.Helpers.Guessr
             return Arm64XBinaryForm.Unknown;
         }
 
+        private string[] ResolveLongerNames(ReadOnlySpan<byte> exeSpan, string[] sectionNames)
+        {
+            var list = new List<string>(sectionNames);
+
+            if (true
+                && BinaryPrimitives.ReadInt32LittleEndian(exeSpan.Slice(8, 4)) is int offsetSymbolTable
+                && BinaryPrimitives.ReadInt32LittleEndian(exeSpan.Slice(12, 4)) is int numOfSymbols
+                && offsetSymbolTable != 0
+                && offsetSymbolTable + 18 * numOfSymbols is int offsetStringTable
+                && offsetStringTable <= exeSpan.Length
+                && exeSpan.Slice(offsetStringTable) is ReadOnlySpan<byte> stringTable
+            )
+            {
+                for (int x = 0, cx = list.Count; x < cx; x++)
+                {
+                    var name = list[x];
+                    if (true
+                        && name.StartsWith("/")
+                        && int.TryParse(name.Substring(1), out int offsetToStringTable)
+                        && offsetToStringTable <= stringTable.Length
+                    )
+                    {
+                        list[x] = Encoding.Latin1.GetString(
+                            CutByNullChar(stringTable.Slice(offsetToStringTable))
+                        );
+                    }
+                }
+            }
+
+            return list.ToArray();
+        }
+
+        private ReadOnlySpan<byte> CutByNullChar(ReadOnlySpan<byte> span)
+        {
+            var at = span.IndexOf((byte)0);
+            return (at < 0) ? span : span.Slice(0, at);
+        }
+
         private record SectionNamesTested(
             bool a64xrm,
             bool hexpthk
@@ -259,5 +301,17 @@ namespace LibAmong3.Helpers.Guessr
             return Guess(exe, new Guess1Options { });
         }
 
+        private string[] ReadSectionNames(ReadOnlySpan<byte> sectionHeader, int numOfSections)
+        {
+            var list = new string[numOfSections];
+            for (int index = 0; index < numOfSections; index++)
+            {
+                list[index] = Encoding.Latin1.GetString(
+                    sectionHeader.Slice(40 * index, 8)
+                )
+                    .TrimEnd('\0', ' ');
+            }
+            return list;
+        }
     }
 }
